@@ -1,0 +1,99 @@
+name: MurmurMobile
+options:
+  bundleIdPrefix: com.murmur
+  deploymentTarget:
+    iOS: "18.0"
+    watchOS: "11.0"
+  xcodeVersion: "16.0"
+
+packages:
+  MurmurKit:
+    path: ../MurmurKit
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: "ZHCT595PYJ"
+
+targets:
+  # iOS App
+  Murmur:
+    type: application
+    platform: iOS
+    sources:
+      - iOS
+    dependencies:
+      - package: MurmurKit
+      - target: MurmurKeyboard
+    info:
+      path: iOS/Info.plist
+      properties:
+        UILaunchScreen: {}
+        CFBundleDisplayName: Murmur
+        NSMicrophoneUsageDescription: "Murmur needs microphone access to transcribe your voice."
+        NSLocalNetworkUsageDescription: "Murmur uses the local network to sync transcriptions with your Mac."
+        NSBonjourServices:
+          - _murmur._tcp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.murmur.ios
+        CODE_SIGN_ENTITLEMENTS: iOS/Murmur.entitlements
+
+  # watchOS App
+  MurmurWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - watchOS
+    dependencies:
+      - package: MurmurKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.murmur.ios.watch
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Murmur needs microphone access to transcribe your voice."
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.murmur.ios
+        INFOPLIST_KEY_CFBundleDisplayName: Murmur
+        CODE_SIGN_ENTITLEMENTS: watchOS/MurmurWatch.entitlements
+
+  # Keyboard Extension
+  MurmurKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Keyboard
+    dependencies:
+      - package: MurmurKit
+    info:
+      path: Keyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Murmur
+        NSMicrophoneUsageDescription: "Murmur needs microphone access to transcribe your voice."
+        NSExtension:
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en
+            RequestsOpenAccess: true
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.murmur.ios.keyboard
+        CODE_SIGN_ENTITLEMENTS: Keyboard/MurmurKeyboard.entitlements
+
+schemes:
+  Murmur:
+    build:
+      targets:
+        Murmur: all
+        MurmurKeyboard: all
+    run:
+      config: Debug
+
+  MurmurWatch:
+    build:
+      targets:
+        MurmurWatch: all
+    run:
+      config: Debug
