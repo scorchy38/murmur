@@ -1,5 +1,8 @@
 import Foundation
 import Network
+import os
+
+private let log = Logger(subsystem: "com.murmur", category: "Sync")
 
 @MainActor
 public class SyncService: ObservableObject {
@@ -105,7 +108,7 @@ private final class SyncImpl: Sendable {
 
         for entry in connections where entry.connection.state == .ready {
             entry.connection.send(content: message, completion: .contentProcessed({ error in
-                if let error { print("[Murmur Sync] Send error: \(error)") }
+                if let error { log.info("[Sync] Send error: \(error)") }
             }))
         }
     }
@@ -122,14 +125,22 @@ private final class SyncImpl: Sendable {
             }
 
             listener?.stateUpdateHandler = { [weak self] state in
-                if case .ready = state {
-                    print("[Murmur Sync] \(self?.deviceName ?? "") listening")
+                let name = self?.deviceName ?? ""
+                switch state {
+                case .ready:
+                    log.info("[Sync] \(name) listening")
+                case .failed(let error):
+                    log.error("[Sync] \(name) listener failed: \(error)")
+                case .cancelled:
+                    log.info("[Sync] \(name) listener cancelled")
+                default:
+                    log.info("[Sync] \(name) listener state: \(String(describing: state))")
                 }
             }
 
             listener?.start(queue: .main)
         } catch {
-            print("[Murmur Sync] Listener failed: \(error)")
+            log.info("[Sync] Listener failed: \(error)")
         }
     }
 
@@ -155,18 +166,31 @@ private final class SyncImpl: Sendable {
                 guard !self.knownEndpoints.contains(endpointID) else { continue }
                 self.knownEndpoints.insert(endpointID)
 
+                log.info("[Sync] found peer: \(peerName)")
+
                 // To avoid duplicate connections (A→B and B→A),
                 // only the device with the "lesser" name initiates
                 if self.deviceName < peerName {
+                    log.info("[Sync] initiating connection to \(peerName)")
                     let connection = NWConnection(to: result.endpoint, using: .tcp)
                     self.addConnection(connection, name: peerName)
+                } else {
+                    log.info("[Sync] waiting for \(peerName) to initiate")
                 }
             }
         }
 
         browser?.stateUpdateHandler = { [weak self] state in
-            if case .ready = state {
-                print("[Murmur Sync] \(self?.deviceName ?? "") browsing")
+            let name = self?.deviceName ?? ""
+            switch state {
+            case .ready:
+                log.info("[Sync] \(name) browsing")
+            case .failed(let error):
+                log.error("[Sync] \(name) browser failed: \(error)")
+            case .cancelled:
+                log.info("[Sync] \(name) browser cancelled")
+            default:
+                log.info("[Sync] \(name) browser state: \(String(describing: state))")
             }
         }
 
@@ -181,8 +205,13 @@ private final class SyncImpl: Sendable {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
+                log.info("[Sync] connection ready to \(name)")
                 onPeers(self?.connections.filter { $0.connection.state == .ready }.map(\.name) ?? [])
-            case .failed, .cancelled:
+            case .failed(let error):
+                log.error("[Sync] connection failed to \(name): \(error)")
+                self?.removeConnection(connection)
+            case .cancelled:
+                log.info("[Sync] connection cancelled to \(name)")
                 self?.removeConnection(connection)
             default:
                 break
@@ -206,7 +235,10 @@ private final class SyncImpl: Sendable {
             connection.receive(minimumIncompleteLength: Int(length), maximumLength: Int(length)) { [weak self] payload, _, isComplete, _ in
                 if let payload,
                    let transcription = try? JSONDecoder().decode(Transcription.self, from: payload) {
+                    log.info("[Sync] received transcription: \(transcription.text.prefix(50))")
                     self?.onReceive(transcription)
+                } else {
+                    log.error("[Sync] failed to decode payload (\(payload?.count ?? 0) bytes)")
                 }
 
                 if isComplete {
