@@ -28,7 +28,7 @@ Murmur/
 ## Requirements
 
 - Xcode 16+
-- macOS 15+, iOS 18+, watchOS 11+
+- macOS 14+, iOS 18+, watchOS 11+
 - Groq API key (set via macOS Settings → API, or `Secrets.plist`; CI injects from `GROQ_API_KEY` secret)
 - All devices on the same local network for sync
 
