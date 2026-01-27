@@ -193,6 +193,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     func startRecording() {
         guard appState.recordingState == .idle else { return }
 
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard status == .authorized else {
+            if status == .notDetermined {
+                AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                    if granted {
+                        Task { @MainActor in self?.startRecording() }
+                    }
+                }
+            }
+            return
+        }
+
         appState.recordingState = .recording
         appState.recordingStartDate = Date()
         audioRecorder?.startRecording()
