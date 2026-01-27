@@ -2,15 +2,10 @@ import SwiftUI
 import Combine
 import MurmurKit
 
-enum RecordingState: Equatable {
-    case idle
-    case recording
-    case transcribing
-}
-
 @MainActor
 class AppState: ObservableObject {
-    @Published var recordingState: RecordingState = .idle
+    @Published var recordingState: RecordButtonState = .idle
+    @Published var recordingStartDate: Date?
     @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 50)
     @Published var lastError: String?
 

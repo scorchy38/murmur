@@ -29,7 +29,7 @@ Murmur/
 
 - Xcode 16+
 - macOS 15+, iOS 18+, watchOS 11+
-- Groq API key (hardcoded in MurmurKit/TranscriptionService.swift)
+- Groq API key (set via macOS Settings → API, or `Secrets.plist`; CI injects from `GROQ_API_KEY` secret)
 - All devices on the same local network for sync
 
 ## Building
@@ -46,3 +46,46 @@ cd MurmurMobile && xcodegen generate
 xcodebuild -scheme Murmur -destination 'platform=iOS Simulator' build
 xcodebuild -scheme MurmurWatch -destination 'platform=watchOS Simulator' build
 ```
+
+## Installation
+
+Download the latest build from [Releases](../../releases).
+
+### Mac
+
+1. Unzip **Murmur-Mac.zip**
+2. Drag **Murmur.app** to your Applications folder
+3. First launch: right-click the app → **Open** (bypasses Gatekeeper)
+4. Murmur appears in your menu bar — hold **Control-Space** to dictate
+
+### iPhone
+
+Since this isn't on the App Store, you'll use **AltStore** to install it.
+
+#### One-time setup
+
+1. On your Mac, go to [altstore.io](https://altstore.io) and download **AltServer**
+2. Move AltServer to Applications, open it — it appears in your menu bar
+3. Plug your iPhone into your Mac with a cable
+4. Click the AltServer menu bar icon → **Install AltStore** → pick your iPhone
+5. Sign in with your Apple ID when prompted
+6. AltStore now appears on your iPhone
+
+#### Install Murmur
+
+1. AirDrop **Murmur.ipa** to your iPhone (or transfer via Files)
+2. Open the file — it offers to open in AltStore
+   (or: open AltStore → My Apps → tap **+** → select the IPA)
+3. Murmur appears on your home screen
+4. On first launch: **Settings → Privacy → Microphone** → allow Murmur
+
+#### Keyboard Extension
+
+1. **Settings → General → Keyboard → Keyboards → Add New Keyboard**
+2. Select **Murmur**
+3. Tap Murmur → enable **Allow Full Access** (needed for microphone)
+4. Switch to the Murmur keyboard in any app to dictate
+
+> **Note:** Free Apple IDs require apps to be refreshed every **7 days**.
+> Keep AltServer running on your Mac + same Wi-Fi as your phone — it auto-refreshes.
+> If the app stops opening, just open AltStore → **Refresh All**.

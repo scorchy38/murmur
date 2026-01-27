@@ -25,6 +25,8 @@ targets:
     dependencies:
       - package: MurmurKit
       - target: MurmurKeyboard
+      - target: MurmurWatch
+        embed: true
     info:
       path: iOS/Info.plist
       properties:

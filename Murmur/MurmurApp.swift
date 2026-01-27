@@ -187,6 +187,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         guard appState.recordingState == .idle else { return }
 
         appState.recordingState = .recording
+        appState.recordingStartDate = Date()
         audioRecorder?.startRecording()
         updateMenuBarIcon(recording: true)
 
@@ -199,6 +200,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         guard appState.recordingState == .recording else { return }
 
         appState.recordingState = .transcribing
+        appState.recordingStartDate = nil
         updateMenuBarIcon(recording: false)
 
         audioRecorder?.stopRecording { [weak self] audioURL in
@@ -256,11 +258,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func updateMenuBarIcon(recording: Bool) {
         guard let button = statusItem?.button else { return }
-        button.image = NSImage(
-            systemSymbolName: recording ? "waveform.circle.fill" : "waveform",
-            accessibilityDescription: "Murmur"
-        )
-        button.contentTintColor = recording ? .systemRed : nil
+        if recording {
+            // Non-template colored image so it stays visible in the menu bar
+            let config = NSImage.SymbolConfiguration(paletteColors: [NSColor(MurmurTokens.accent)])
+            let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Recording")?
+                .withSymbolConfiguration(config)
+            img?.isTemplate = false
+            button.image = img
+        } else {
+            let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Murmur")
+            button.image = img
+        }
     }
 
     // MARK: - Sync

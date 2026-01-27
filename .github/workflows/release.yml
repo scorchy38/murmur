@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Inject API key
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          sed -i '' "s|private static let embeddedKey = \"\"|private static let embeddedKey = \"${GROQ_API_KEY}\"|" \
+            MurmurKit/Sources/MurmurKit/TranscriptionService.swift
+
+      # ── macOS ──────────────────────────────────────────────
+
+      - name: Generate macOS project
+        run: xcodegen generate
+
+      - name: Archive macOS app
+        run: |
+          xcodebuild archive \
+            -scheme Murmur \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/Murmur.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package macOS zip
+        run: |
+          cp -R build/Murmur.xcarchive/Products/Applications/Murmur.app build/Murmur.app
+          cd build && zip -r Murmur-Mac.zip Murmur.app
+
+      # ── iOS ────────────────────────────────────────────────
+
+      - name: Generate iOS project
+        run: cd MurmurMobile && xcodegen generate
+
+      - name: Archive iOS app
+        run: |
+          cd MurmurMobile
+          xcodebuild archive \
+            -scheme Murmur \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath ../build/MurmurMobile.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package iOS IPA
+        run: |
+          mkdir -p build/Payload
+          cp -R build/MurmurMobile.xcarchive/Products/Applications/Murmur.app build/Payload/Murmur.app
+          rm -rf build/Payload/Murmur.app/Watch
+          cd build && zip -r Murmur.ipa Payload
+
+      # ── Upload ─────────────────────────────────────────────
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/Murmur-Mac.zip
+            build/Murmur.ipa

@@ -12,13 +12,23 @@
 		6456F65069B01263E84C4598 /* MurmurApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF06E0B8DF80D47C8FE8C61 /* MurmurApp.swift */; };
 		681E8570E5903CEF6F1556B6 /* MurmurKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F273232801C77CC23FD62950 /* MurmurKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		69E79FCABE24D2C319B319C7 /* MurmurKit in Frameworks */ = {isa = PBXBuildFile; productRef = 80B967291368F11454F6A77F /* MurmurKit */; };
+		835D50805DA157C89C990A9A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C6038B3B8752D9DF2A91B731 /* Assets.xcassets */; };
 		A9E6985403E45C5BA9CA7B85 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E719E6F4B385F7E647C9A7 /* ContentView.swift */; };
 		B0CC3DC900C170D042A5B343 /* MurmurWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8C5593AF9AD6F1677E8A4C /* MurmurWatchApp.swift */; };
 		C3D56BBD76B19D81178A0F5A /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CEEE3BC1FF25590D5A9230 /* KeyboardViewController.swift */; };
+		DA48FCC9D6588BDEB64C3750 /* MurmurWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 9F18F7232BC2128DE48866F7 /* MurmurWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E31FCAE3C696AE313D0B8B8E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0DCE10C78FF02624996D781 /* Assets.xcassets */; };
 		F8E2B8AE05FEAD593420EE95 /* MurmurKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0530739B10F4DB0E4767B5F2 /* MurmurKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		B01DDF73FAD1081E97553742 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 57A527723DDDC0A6D15BF985 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 66EED1DA07A344623CFB9D37;
+			remoteInfo = MurmurWatch;
+		};
 		B2E8491A5C2B06BBBE1CA8A4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 57A527723DDDC0A6D15BF985 /* Project object */;
@@ -29,6 +39,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		2CE1906D49DDDC46B4D43D3C /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				DA48FCC9D6588BDEB64C3750 /* MurmurWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9842D93D287DDD1E22C0753F /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -50,8 +71,10 @@
 		77CEEE3BC1FF25590D5A9230 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		9F18F7232BC2128DE48866F7 /* MurmurWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MurmurWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A76A65B1EF599A23E948DC58 /* MurmurKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MurmurKit; path = ../MurmurKit; sourceTree = SOURCE_ROOT; };
+		B0DCE10C78FF02624996D781 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B9E719E6F4B385F7E647C9A7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C07FE327C208A428E1B71E58 /* Murmur.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Murmur.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C6038B3B8752D9DF2A91B731 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CFF06E0B8DF80D47C8FE8C61 /* MurmurApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MurmurApp.swift; sourceTree = "<group>"; };
 		D3FAD882566F5FCCC2FD3FBA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D509793A2E6975EE64E75981 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
@@ -90,6 +113,7 @@
 		4E197A9FF0694481D5F7F48B /* watchOS */ = {
 			isa = PBXGroup;
 			children = (
+				C6038B3B8752D9DF2A91B731 /* Assets.xcassets */,
 				1B8B638B42F133A622FE04CE /* MurmurWatch.entitlements */,
 				DC8C5593AF9AD6F1677E8A4C /* MurmurWatchApp.swift */,
 				D509793A2E6975EE64E75981 /* WatchContentView.swift */,
@@ -111,6 +135,7 @@
 		A5DC250A90FD03F1482D867E /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				B0DCE10C78FF02624996D781 /* Assets.xcassets */,
 				B9E719E6F4B385F7E647C9A7 /* ContentView.swift */,
 				09991D52456796A70BB955C9 /* Info.plist */,
 				2F02E41E04D3F805D91C8293 /* Murmur.entitlements */,
@@ -174,6 +199,7 @@
 			buildConfigurationList = 8A2F9452061C0CFFD071A00C /* Build configuration list for PBXNativeTarget "MurmurWatch" */;
 			buildPhases = (
 				E7C5443146C638AC88513064 /* Sources */,
+				5BC2308B065B980D07C5E74A /* Resources */,
 				0BF458E469D66C4D67F8A246 /* Frameworks */,
 			);
 			buildRules = (
@@ -193,13 +219,16 @@
 			buildConfigurationList = EF2452521794599805008EDB /* Build configuration list for PBXNativeTarget "Murmur" */;
 			buildPhases = (
 				D40CF8DDCFB96646F990D2B4 /* Sources */,
+				CD1149EEA51640C5B2FD7E9F /* Resources */,
 				2EB0F5895D75D2B97F5E8F4B /* Frameworks */,
 				9842D93D287DDD1E22C0753F /* Embed Foundation Extensions */,
+				2CE1906D49DDDC46B4D43D3C /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				40071E49DAF7E22F92E35A71 /* PBXTargetDependency */,
+				813CD29BF265C6A4BB0AA68A /* PBXTargetDependency */,
 			);
 			name = Murmur;
 			packageProductDependencies = (
@@ -253,6 +282,25 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		5BC2308B065B980D07C5E74A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				835D50805DA157C89C990A9A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CD1149EEA51640C5B2FD7E9F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E31FCAE3C696AE313D0B8B8E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		975C64BC00DDBF9B1FF05ED5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -287,6 +335,11 @@
 			isa = PBXTargetDependency;
 			target = 15DFC62E46AF1A4BB4962F21 /* MurmurKeyboard */;
 			targetProxy = B2E8491A5C2B06BBBE1CA8A4 /* PBXContainerItemProxy */;
+		};
+		813CD29BF265C6A4BB0AA68A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 66EED1DA07A344623CFB9D37 /* MurmurWatch */;
+			targetProxy = B01DDF73FAD1081E97553742 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

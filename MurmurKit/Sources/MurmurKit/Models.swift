@@ -1,6 +1,12 @@
 import Foundation
 import SwiftUI
 
+public enum RecordButtonState: Equatable, Sendable {
+    case idle
+    case recording
+    case transcribing
+}
+
 public struct Transcription: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public let text: String
@@ -46,6 +52,11 @@ public class MurmurStore: ObservableObject {
         transcriptions.insert(t, at: 0)
         transcriptions.sort { $0.timestamp > $1.timestamp }
         if transcriptions.count > 50 { transcriptions = Array(transcriptions.prefix(50)) }
+        save()
+    }
+
+    public func delete(id: UUID) {
+        transcriptions.removeAll { $0.id == id }
         save()
     }
 

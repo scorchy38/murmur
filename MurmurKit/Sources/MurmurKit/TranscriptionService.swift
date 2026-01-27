@@ -19,26 +19,33 @@ public actor TranscriptionService {
 
     private let baseURL = "https://api.groq.com/openai/v1/audio/transcriptions"
 
-    private var apiKey: String {
-        // Check UserDefaults first (set via Settings), then fall back to Secrets.plist
+    // Injected at build time by CI from GROQ_API_KEY secret. Empty in source.
+    private static let embeddedKey = ""
+
+    private var apiKey: String? {
         if let key = UserDefaults.standard.string(forKey: "groqApiKey"), !key.isEmpty {
             return key
         }
         if let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
            let dict = NSDictionary(contentsOf: url),
-           let key = dict["GROQ_API_KEY"] as? String {
+           let key = dict["GROQ_API_KEY"] as? String, !key.isEmpty {
             return key
         }
-        return ""
+        if !Self.embeddedKey.isEmpty {
+            return Self.embeddedKey
+        }
+        return nil
     }
 
     private init() {}
 
     public func transcribe(audioData: Data, format: String = "m4a") async throws -> String {
+        guard let key = apiKey else { throw TranscriptionError.noAPIKey }
+
         let boundary = UUID().uuidString
         var request = URLRequest(url: URL(string: baseURL)!)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()

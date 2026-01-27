@@ -11,8 +11,9 @@ class KeyboardViewController: UIInputViewController {
     private var syncService: SyncService?
     private var isRecording = false
     private var isTranscribing = false
-    private var audioLevels: [CGFloat] = Array(repeating: 0, count: 20)
     private var levelTimer: Timer?
+
+    private let barCount = MurmurTokens.Sizing.waveformBarCount
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -25,7 +26,6 @@ class KeyboardViewController: UIInputViewController {
     private func setupUI() {
         view.backgroundColor = UIColor.systemBackground
 
-        // Main container
         let container = UIStackView()
         container.axis = .vertical
         container.alignment = .center
@@ -43,32 +43,33 @@ class KeyboardViewController: UIInputViewController {
         // Waveform
         waveformView = UIStackView()
         waveformView.axis = .horizontal
-        waveformView.spacing = 2
+        waveformView.spacing = MurmurTokens.Sizing.waveformBarSpacing
         waveformView.alignment = .center
         waveformView.distribution = .fillEqually
         waveformView.isHidden = true
 
-        for _ in 0..<20 {
+        for _ in 0..<barCount {
             let bar = UIView()
-            bar.backgroundColor = .systemRed
-            bar.layer.cornerRadius = 1.5
+            bar.backgroundColor = UIColor(MurmurTokens.waveformTint)
+            bar.layer.cornerRadius = MurmurTokens.Sizing.waveformBarWidth / 2
             bar.translatesAutoresizingMaskIntoConstraints = false
-            bar.widthAnchor.constraint(equalToConstant: 3).isActive = true
-            bar.heightAnchor.constraint(equalToConstant: 4).isActive = true
+            bar.widthAnchor.constraint(equalToConstant: MurmurTokens.Sizing.waveformBarWidth).isActive = true
+            bar.heightAnchor.constraint(equalToConstant: MurmurTokens.Sizing.waveformMinBarHeight).isActive = true
             waveformView.addArrangedSubview(bar)
         }
 
         container.addArrangedSubview(waveformView)
 
         // Record button
+        let buttonSize: CGFloat = MurmurTokens.Sizing.recordButtonInner
         recordButton = UIButton(type: .system)
-        recordButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
+        recordButton.setImage(UIImage(systemName: MurmurTokens.Symbol.micIdle), for: .normal)
         recordButton.tintColor = .white
-        recordButton.backgroundColor = .systemRed
-        recordButton.layer.cornerRadius = 30
+        recordButton.backgroundColor = UIColor(MurmurTokens.recordButtonIdleFill)
+        recordButton.layer.cornerRadius = buttonSize / 2
         recordButton.translatesAutoresizingMaskIntoConstraints = false
-        recordButton.widthAnchor.constraint(equalToConstant: 60).isActive = true
-        recordButton.heightAnchor.constraint(equalToConstant: 60).isActive = true
+        recordButton.widthAnchor.constraint(equalToConstant: buttonSize).isActive = true
+        recordButton.heightAnchor.constraint(equalToConstant: buttonSize).isActive = true
         recordButton.addTarget(self, action: #selector(recordTapped), for: .touchUpInside)
         container.addArrangedSubview(recordButton)
 
@@ -99,7 +100,8 @@ class KeyboardViewController: UIInputViewController {
             await MainActor.run {
                 if started {
                     isRecording = true
-                    recordButton.setImage(UIImage(systemName: "stop.fill"), for: .normal)
+                    recordButton.setImage(UIImage(systemName: MurmurTokens.Symbol.stop), for: .normal)
+                    recordButton.backgroundColor = UIColor(MurmurTokens.recordButtonActiveFill)
                     statusLabel.text = "Recording... Tap to stop"
                     waveformView.isHidden = false
                     startWaveformAnimation()
@@ -124,9 +126,7 @@ class KeyboardViewController: UIInputViewController {
                     let text = try await TranscriptionService.shared.transcribe(audioData: data)
                     let processed = TextProcessor.process(text)
                     await MainActor.run {
-                        // Insert text at cursor
                         textDocumentProxy.insertText(processed)
-                        // Send to Mac
                         let t = Transcription(text: processed, device: "iPhone Keyboard")
                         syncService?.send(t)
                         resetUI()
@@ -147,7 +147,8 @@ class KeyboardViewController: UIInputViewController {
 
     private func resetUI() {
         isTranscribing = false
-        recordButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
+        recordButton.setImage(UIImage(systemName: MurmurTokens.Symbol.micIdle), for: .normal)
+        recordButton.backgroundColor = UIColor(MurmurTokens.recordButtonIdleFill)
         statusLabel.text = "Tap to dictate"
     }
 
@@ -168,7 +169,7 @@ class KeyboardViewController: UIInputViewController {
 
         for (index, bar) in waveformView.arrangedSubviews.enumerated() {
             let level = index < levels.count ? levels[index] : 0
-            let height = max(4, level * 40)
+            let height = max(MurmurTokens.Sizing.waveformMinBarHeight, level * MurmurTokens.Sizing.waveformMaxHeight)
 
             if let heightConstraint = bar.constraints.first(where: { $0.firstAttribute == .height }) {
                 heightConstraint.constant = height

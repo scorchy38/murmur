@@ -6,41 +6,97 @@ struct ContentView: View {
     @EnvironmentObject var syncService: SyncService
     @StateObject private var recorder = AudioRecorder()
     @State private var error: String?
+    @State private var recordingStartDate: Date?
+    @State private var copiedItemId: UUID?
+
+    private var buttonState: RecordButtonState {
+        if store.isTranscribing { return .transcribing }
+        if store.isRecording { return .recording }
+        return .idle
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Transcription list
-                if store.transcriptions.isEmpty {
-                    emptyState
+            Group {
+                if store.transcriptions.isEmpty && !store.isRecording && !store.isTranscribing {
+                    ContentUnavailableView {
+                        Label("No Transcriptions", systemImage: MurmurTokens.Symbol.emptyState)
+                    } description: {
+                        Text("Tap the microphone to start recording")
+                    }
                 } else {
-                    transcriptionList
+                    List {
+                        if store.isRecording {
+                            Section {
+                                VStack(spacing: 12) {
+                                    MurmurRecordingIndicator(startDate: recordingStartDate)
+                                    MurmurWaveformView(levels: recorder.audioLevels)
+                                        .frame(height: 44)
+                                }
+                                .listRowSeparator(.hidden)
+                            }
+                        }
+
+                        if !store.transcriptions.isEmpty {
+                            Section {
+                                ForEach(store.transcriptions) { item in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(item.text)
+                                            .font(.body)
+
+                                        metadataRow(for: item)
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            copyText(item.text, itemId: item.id)
+                                        } label: {
+                                            Label("Copy", systemImage: MurmurTokens.Symbol.copy)
+                                        }
+                                        ShareLink(item: item.text)
+                                        Divider()
+                                        Button(role: .destructive) {
+                                            store.delete(id: item.id)
+                                        } label: {
+                                            Label("Delete", systemImage: MurmurTokens.Symbol.delete)
+                                        }
+                                    }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            store.delete(id: item.id)
+                                        } label: {
+                                            Label("Delete", systemImage: MurmurTokens.Symbol.delete)
+                                        }
+                                    }
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            copyText(item.text, itemId: item.id)
+                                        } label: {
+                                            Label("Copy", systemImage: MurmurTokens.Symbol.copy)
+                                        }
+                                        .tint(MurmurTokens.accent)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                    .animation(MurmurTokens.Anim.stateTransition, value: store.isRecording)
                 }
-
-                Divider()
-
-                // Record button
-                recordSection
+            }
+            .sensoryFeedback(.success, trigger: copiedItemId)
+            .safeAreaInset(edge: .bottom) {
+                recordBar
             }
             .navigationTitle("Murmur")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(syncService.isConnected ? .green : .orange)
-                            .frame(width: 8, height: 8)
-                        Text(syncService.isConnected ? syncService.connectedPeers.joined(separator: ", ") : "No peers")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    syncIndicator
                 }
             }
             .onAppear {
                 syncService.start { [weak store] transcription in
                     store?.addTranscription(transcription)
                 } onConnected: { [weak store, weak syncService] in
-                    // Send iPhone's history to Mac on connect
                     if let history = store?.transcriptions {
                         syncService?.sendAll(history)
                     }
@@ -52,98 +108,76 @@ struct ContentView: View {
                 Text(error ?? "")
             }
         }
+        .tint(MurmurTokens.accent)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "waveform")
-                .font(.system(size: 60))
-                .foregroundStyle(.tertiary)
-            Text("No transcriptions yet")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Text("Tap the mic button to start")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-            Spacer()
-        }
-    }
+    // MARK: - Copy
 
-    private var transcriptionList: some View {
-        List(store.transcriptions) { item in
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.text)
-                    .font(.body)
-                HStack {
-                    Text(item.timeAgo)
-                    Text("•")
-                    Text(item.device)
-                }
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                UIPasteboard.general.string = item.text
+    private func copyText(_ text: String, itemId: UUID) {
+        UIPasteboard.general.string = text
+        copiedItemId = itemId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if copiedItemId == itemId {
+                copiedItemId = nil
             }
         }
-        .listStyle(.plain)
     }
 
-    private var recordSection: some View {
-        VStack(spacing: 12) {
-            if store.isRecording {
-                // Waveform
-                HStack(spacing: 2) {
-                    ForEach(0..<recorder.audioLevels.count, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.red)
-                            .frame(width: 4, height: max(4, recorder.audioLevels[i] * 40))
-                    }
-                }
-                .frame(height: 40)
-                .padding(.horizontal)
-            }
+    // MARK: - Metadata Row
 
-            // Button
-            Button {
+    @ViewBuilder
+    private func metadataRow(for item: Transcription) -> some View {
+        HStack(spacing: 4) {
+            if copiedItemId == item.id {
+                Image(systemName: "checkmark")
+                Text("Copied")
+            } else {
+                Text(item.timeAgo)
+                Text("\u{00B7}")
+                Text(item.device)
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(copiedItemId == item.id ? MurmurTokens.accent : Color.secondary.opacity(0.6))
+        .animation(.easeInOut(duration: 0.2), value: copiedItemId)
+    }
+
+    // MARK: - Bottom Record Bar
+
+    private var recordBar: some View {
+        VStack(spacing: 6) {
+            MurmurRecordButton(state: buttonState, style: .circle) {
                 Task { await toggleRecording() }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(store.isRecording ? .red.opacity(0.2) : .red.opacity(0.1))
-                        .frame(width: 80, height: 80)
-
-                    Circle()
-                        .fill(store.isRecording ? .red : .red)
-                        .frame(width: 64, height: 64)
-
-                    if store.isTranscribing {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: store.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.title)
-                            .foregroundStyle(.white)
-                    }
-                }
             }
-            .disabled(store.isTranscribing)
 
-            Text(store.isRecording ? "Tap to stop" : (store.isTranscribing ? "Transcribing..." : "Tap to record"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if store.isTranscribing {
+                Text("Transcribing...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .padding(.vertical, 20)
-        .background(.bar)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .shadow(color: .black.opacity(0.06), radius: 8, y: -4)
     }
+
+    // MARK: - Sync Indicator
+
+    private var syncIndicator: some View {
+        Image(systemName: "antenna.radiowaves.left.and.right")
+            .imageScale(.small)
+            .foregroundStyle(syncService.isConnected ? Color.green : Color.secondary)
+    }
+
+    // MARK: - Recording
 
     private func toggleRecording() async {
         if store.isRecording {
             store.isRecording = false
             store.isTranscribing = true
+            recordingStartDate = nil
 
             if let data = recorder.stopRecording() {
                 do {
@@ -151,7 +185,6 @@ struct ContentView: View {
                     let processed = TextProcessor.process(text)
                     store.add(processed, device: "iPhone")
                     UIPasteboard.general.string = processed
-                    // Send to Mac over local network
                     if let latest = store.transcriptions.first {
                         syncService.send(latest)
                     }
@@ -165,6 +198,7 @@ struct ContentView: View {
             let started = await recorder.startRecording()
             if started {
                 store.isRecording = true
+                recordingStartDate = Date()
             } else {
                 error = "Could not start recording. Check microphone permission."
             }
