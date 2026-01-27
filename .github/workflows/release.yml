@@ -26,6 +26,11 @@ jobs:
           sed -i '' "s|private static let embeddedKey = \"\"|private static let embeddedKey = \"${GROQ_API_KEY}\"|" \
             MurmurKit/Sources/MurmurKit/TranscriptionService.swift
 
+      - name: Create placeholder Secrets.plist
+        run: |
+          plutil -create plist MurmurMobile/iOS/Secrets.plist
+          plutil -insert GROQ_API_KEY -string "" MurmurMobile/iOS/Secrets.plist
+
       # ── macOS ──────────────────────────────────────────────
 
       - name: Generate macOS project
