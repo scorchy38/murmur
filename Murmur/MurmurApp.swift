@@ -68,6 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         popover?.contentViewController = NSHostingController(
             rootView: MenuBarView()
                 .environmentObject(appState)
+                .environmentObject(syncService)
         )
 
         // Monitor for clicks outside popover
@@ -113,8 +114,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     @objc private func openSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        popover?.performClose(nil)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
     }
 
     @objc private func quitApp() {
@@ -165,12 +169,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func showSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        // For macOS 13+
-        if #available(macOS 13.0, *) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        } else {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        popover?.performClose(nil)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            if #available(macOS 13.0, *) {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } else {
+                NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+            }
         }
     }
 

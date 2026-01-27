@@ -26,6 +26,10 @@ public actor TranscriptionService {
         if let key = UserDefaults.standard.string(forKey: "groqApiKey"), !key.isEmpty {
             return key
         }
+        if let shared = UserDefaults(suiteName: "group.com.murmur.shared"),
+           let key = shared.string(forKey: "groqApiKey"), !key.isEmpty {
+            return key
+        }
         if let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
            let dict = NSDictionary(contentsOf: url),
            let key = dict["GROQ_API_KEY"] as? String, !key.isEmpty {
@@ -38,6 +42,13 @@ public actor TranscriptionService {
     }
 
     private init() {}
+
+    /// Copies the resolved API key into the shared app group so extensions can access it.
+    public func syncKeyToAppGroup() {
+        if let key = apiKey {
+            UserDefaults(suiteName: "group.com.murmur.shared")?.set(key, forKey: "groqApiKey")
+        }
+    }
 
     public func transcribe(audioData: Data, format: String = "m4a") async throws -> String {
         guard let key = apiKey else { throw TranscriptionError.noAPIKey }

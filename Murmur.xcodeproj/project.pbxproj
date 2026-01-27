@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		00392263BF1F13D599791D5A /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC82B5DCE3D7045884CF6CA /* RecordingView.swift */; };
+		0B0DE30DC658C7AF15780161 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6E31788C1C978093E3EDCDBD /* Secrets.plist */; };
 		1950BDF0067EFE703A46E74C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */; };
+		33241BAFB3691EF79DF4BA77 /* Secrets.plist.example in Resources */ = {isa = PBXBuildFile; fileRef = FA661D4443881A49FC4400A8 /* Secrets.plist.example */; };
 		58A5D8C5CFF25765077E21A9 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC23D39BB29EF4CEDD30E03C /* HotkeyManager.swift */; };
 		6DA49FB9CCA842FA4B2688C0 /* MurmurApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED35761EBF7EF881FA0E7BB9 /* MurmurApp.swift */; };
 		796BC8C0FC65B20CA8DA78D1 /* TextInserter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBEA9058AB4AB8F2D550D04 /* TextInserter.swift */; };
@@ -24,6 +26,7 @@
 		0CBEA9058AB4AB8F2D550D04 /* TextInserter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInserter.swift; sourceTree = "<group>"; };
 		0DC82B5DCE3D7045884CF6CA /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
 		2817413F3EED5052DF0C4BCE /* MurmurKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MurmurKit; path = MurmurKit; sourceTree = SOURCE_ROOT; };
+		6E31788C1C978093E3EDCDBD /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		705220A3846AC6270FEBBC24 /* Murmur.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Murmur.entitlements; sourceTree = "<group>"; };
 		9BF889621049D4E0393F1E2F /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -33,6 +36,7 @@
 		DC23D39BB29EF4CEDD30E03C /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		ED35761EBF7EF881FA0E7BB9 /* MurmurApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MurmurApp.swift; sourceTree = "<group>"; };
 		F6CAC8BA3E17B715F2C60228 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
+		FA661D4443881A49FC4400A8 /* Secrets.plist.example */ = {isa = PBXFileReference; path = Secrets.plist.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +133,8 @@
 				BA0E563F85E519D1E62A21CB /* Info.plist */,
 				705220A3846AC6270FEBBC24 /* Murmur.entitlements */,
 				ED35761EBF7EF881FA0E7BB9 /* MurmurApp.swift */,
+				6E31788C1C978093E3EDCDBD /* Secrets.plist */,
+				FA661D4443881A49FC4400A8 /* Secrets.plist.example */,
 				E97E578EF3D1549639AFEED4 /* Models */,
 				0C213C3B30DA64EAF7632B7D /* Resources */,
 				BE930B8F1B74875B1CA41FCE /* Services */,
@@ -212,6 +218,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				ABAFC95F01025AAD22F4EDA3 /* Assets.xcassets in Resources */,
+				0B0DE30DC658C7AF15780161 /* Secrets.plist in Resources */,
+				33241BAFB3691EF79DF4BA77 /* Secrets.plist.example in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,7 +252,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Murmur/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.murmur.app;
 				SDKROOT = macosx;
 			};
@@ -258,7 +266,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Murmur/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.murmur.app;
 				SDKROOT = macosx;
 			};
@@ -313,7 +321,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -380,7 +388,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;

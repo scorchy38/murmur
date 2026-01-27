@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var error: String?
     @State private var recordingStartDate: Date?
     @State private var copiedItemId: UUID?
+    @State private var showingPeers = false
 
     private var buttonState: RecordButtonState {
         if store.isTranscribing { return .transcribing }
@@ -101,6 +102,7 @@ struct ContentView: View {
                         syncService?.sendAll(history)
                     }
                 }
+                Task { await TranscriptionService.shared.syncKeyToAppGroup() }
             }
             .alert("Error", isPresented: .constant(error != nil)) {
                 Button("OK") { error = nil }
@@ -132,7 +134,7 @@ struct ContentView: View {
                 Image(systemName: "checkmark")
                 Text("Copied")
             } else {
-                Text(item.timeAgo)
+                Text(item.timestamp, style: .relative)
                 Text("\u{00B7}")
                 Text(item.device)
             }
@@ -166,9 +168,33 @@ struct ContentView: View {
     // MARK: - Sync Indicator
 
     private var syncIndicator: some View {
-        Image(systemName: "antenna.radiowaves.left.and.right")
-            .imageScale(.small)
-            .foregroundStyle(syncService.isConnected ? Color.green : Color.secondary)
+        Button {
+            showingPeers.toggle()
+        } label: {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .imageScale(.small)
+                .foregroundStyle(syncService.isConnected ? Color.green : Color.secondary)
+        }
+        .popover(isPresented: $showingPeers) {
+            peerList
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var peerList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if syncService.connectedPeers.isEmpty {
+                Label("No peers connected", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(syncService.connectedPeers, id: \.self) { peer in
+                    Label(peer, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .font(.subheadline)
+        .padding()
     }
 
     // MARK: - Recording

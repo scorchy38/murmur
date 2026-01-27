@@ -3,7 +3,9 @@ import MurmurKit
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var syncService: SyncService
     @State private var copiedItemId: UUID?
+    @State private var showingPeers = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +58,8 @@ struct MenuBarView: View {
 
             Spacer()
 
+            syncIndicator
+
             if appState.recordingState == .idle {
                 MurmurRecordButton(state: .idle, style: .capsule) {
                     NotificationCenter.default.post(name: .startRecording, object: nil)
@@ -64,6 +68,38 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    // MARK: - Sync Indicator
+
+    private var syncIndicator: some View {
+        Button {
+            showingPeers.toggle()
+        } label: {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .imageScale(.small)
+                .foregroundStyle(syncService.isConnected ? Color.green : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showingPeers) {
+            peerList
+        }
+    }
+
+    private var peerList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if syncService.connectedPeers.isEmpty {
+                Label("No peers connected", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(syncService.connectedPeers, id: \.self) { peer in
+                    Label(peer, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .font(.subheadline)
+        .padding()
     }
 
     // MARK: - Transcription List
@@ -85,7 +121,7 @@ struct MenuBarView: View {
                                     Image(systemName: "checkmark")
                                     Text("Copied")
                                 } else {
-                                    Text(entry.timeAgo)
+                                    Text(entry.timestamp, style: .relative)
                                     Text("\u{00B7}")
                                     Text(entry.device)
                                 }
@@ -158,4 +194,5 @@ struct MenuBarView: View {
 #Preview {
     MenuBarView()
         .environmentObject(AppState())
+        .environmentObject(SyncService(deviceName: "Preview"))
 }

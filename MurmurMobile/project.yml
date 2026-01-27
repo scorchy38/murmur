@@ -47,6 +47,9 @@ targets:
     platform: watchOS
     sources:
       - watchOS
+      - path: iOS/Secrets.plist
+        optional: true
+        type: file
     dependencies:
       - package: MurmurKit
     settings:
@@ -54,6 +57,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.murmur.ios.watch
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Murmur needs microphone access to transcribe your voice."
+        INFOPLIST_KEY_WKApplication: YES
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.murmur.ios
         INFOPLIST_KEY_CFBundleDisplayName: Murmur
         CODE_SIGN_ENTITLEMENTS: watchOS/MurmurWatch.entitlements

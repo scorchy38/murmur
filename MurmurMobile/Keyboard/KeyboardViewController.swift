@@ -4,16 +4,27 @@ import MurmurKit
 
 class KeyboardViewController: UIInputViewController {
 
-    private var recordButton: UIButton!
-    private var statusLabel: UILabel!
-    private var waveformView: UIStackView!
+    // MARK: - State
+
     private var recorder: AudioRecorder?
     private var syncService: SyncService?
     private var isRecording = false
     private var isTranscribing = false
     private var levelTimer: Timer?
+    private var recordingStart: Date?
+
+    // MARK: - UI
+
+    private var waveformView: UIStackView!
+    private var actionButton: UIButton!
+    private var statusLabel: UILabel!
+    private var timeLabel: UILabel!
+    private var spinner: UIActivityIndicatorView!
+    private var displayLink: CADisplayLink?
 
     private let barCount = MurmurTokens.Sizing.waveformBarCount
+
+    // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -23,30 +34,55 @@ class KeyboardViewController: UIInputViewController {
         syncService?.start { _ in }
     }
 
-    private func setupUI() {
-        view.backgroundColor = UIColor.systemBackground
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+    }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isRecording {
+            stopWaveformAnimation()
+            recorder?.stopRecording()
+            isRecording = false
+        }
+    }
+
+    // MARK: - UI Setup
+
+    private func setupUI() {
+        // ── Main container ──
         let container = UIStackView()
         container.axis = .vertical
         container.alignment = .center
-        container.spacing = 8
+        container.spacing = 12
         container.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(container)
 
         NSLayoutConstraint.activate([
             container.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             container.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            container.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 16),
-            container.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -16)
+            container.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            container.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24)
         ])
 
-        // Waveform
+        // ── Waveform (fixed-height container prevents layout bounce) ──
+        let waveformContainer = UIView()
+        waveformContainer.translatesAutoresizingMaskIntoConstraints = false
+        waveformContainer.heightAnchor.constraint(equalToConstant: MurmurTokens.Sizing.waveformMaxHeight).isActive = true
+
         waveformView = UIStackView()
         waveformView.axis = .horizontal
         waveformView.spacing = MurmurTokens.Sizing.waveformBarSpacing
         waveformView.alignment = .center
         waveformView.distribution = .fillEqually
-        waveformView.isHidden = true
+        waveformView.translatesAutoresizingMaskIntoConstraints = false
+        waveformView.alpha = 0
+
+        waveformContainer.addSubview(waveformView)
+        NSLayoutConstraint.activate([
+            waveformView.centerXAnchor.constraint(equalTo: waveformContainer.centerXAnchor),
+            waveformView.centerYAnchor.constraint(equalTo: waveformContainer.centerYAnchor),
+        ])
 
         for _ in 0..<barCount {
             let bar = UIView()
@@ -57,36 +93,52 @@ class KeyboardViewController: UIInputViewController {
             bar.heightAnchor.constraint(equalToConstant: MurmurTokens.Sizing.waveformMinBarHeight).isActive = true
             waveformView.addArrangedSubview(bar)
         }
+        container.addArrangedSubview(waveformContainer)
 
-        container.addArrangedSubview(waveformView)
+        // ── Time label ──
+        timeLabel = UILabel()
+        timeLabel.font = .monospacedDigitSystemFont(ofSize: 28, weight: .medium)
+        timeLabel.textColor = UIColor(MurmurTokens.accent)
+        timeLabel.text = "0:00"
+        timeLabel.alpha = 0
+        container.addArrangedSubview(timeLabel)
 
-        // Record button
-        let buttonSize: CGFloat = MurmurTokens.Sizing.recordButtonInner
-        recordButton = UIButton(type: .system)
-        recordButton.setImage(UIImage(systemName: MurmurTokens.Symbol.micIdle), for: .normal)
-        recordButton.tintColor = .white
-        recordButton.backgroundColor = UIColor(MurmurTokens.recordButtonIdleFill)
-        recordButton.layer.cornerRadius = buttonSize / 2
-        recordButton.translatesAutoresizingMaskIntoConstraints = false
-        recordButton.widthAnchor.constraint(equalToConstant: buttonSize).isActive = true
-        recordButton.heightAnchor.constraint(equalToConstant: buttonSize).isActive = true
-        recordButton.addTarget(self, action: #selector(recordTapped), for: .touchUpInside)
-        container.addArrangedSubview(recordButton)
-
-        // Status label
+        // ── Status label ──
         statusLabel = UILabel()
-        statusLabel.text = "Tap to dictate"
-        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.font = .systemFont(ofSize: 14, weight: .medium)
         statusLabel.textColor = .secondaryLabel
+        statusLabel.text = "Tap to dictate"
         container.addArrangedSubview(statusLabel)
 
-        // Set keyboard height
-        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 180)
+        // ── Spinner (for transcribing state) ──
+        spinner = UIActivityIndicatorView(style: .medium)
+        spinner.color = UIColor(MurmurTokens.accent)
+        spinner.hidesWhenStopped = true
+        container.addArrangedSubview(spinner)
+
+        // ── Action button ──
+        var buttonConfig = UIButton.Configuration.filled()
+        buttonConfig.cornerStyle = .capsule
+        buttonConfig.baseBackgroundColor = UIColor(MurmurTokens.accent)
+        buttonConfig.baseForegroundColor = .white
+        buttonConfig.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 24, bottom: 10, trailing: 24)
+        buttonConfig.image = UIImage(systemName: MurmurTokens.Symbol.micIdle, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
+        buttonConfig.imagePadding = 6
+        buttonConfig.attributedTitle = AttributedString("Dictate", attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .semibold)]))
+
+        actionButton = UIButton(configuration: buttonConfig)
+        actionButton.addTarget(self, action: #selector(actionTapped), for: .touchUpInside)
+        container.addArrangedSubview(actionButton)
+
+        // ── Keyboard height ──
+        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 260)
         heightConstraint.priority = .required - 1
         heightConstraint.isActive = true
     }
 
-    @objc private func recordTapped() {
+    // MARK: - Actions
+
+    @objc private func actionTapped() {
         if isRecording {
             stopRecording()
         } else if !isTranscribing {
@@ -94,19 +146,20 @@ class KeyboardViewController: UIInputViewController {
         }
     }
 
+    // MARK: - Recording
+
     private func startRecording() {
         Task {
             let started = await recorder?.startRecording() ?? false
             await MainActor.run {
                 if started {
                     isRecording = true
-                    recordButton.setImage(UIImage(systemName: MurmurTokens.Symbol.stop), for: .normal)
-                    recordButton.backgroundColor = UIColor(MurmurTokens.recordButtonActiveFill)
-                    statusLabel.text = "Recording... Tap to stop"
-                    waveformView.isHidden = false
+                    recordingStart = Date()
+                    transitionToRecording()
                     startWaveformAnimation()
                 } else {
-                    statusLabel.text = "Mic access needed"
+                    statusLabel.text = "Microphone access needed"
+                    statusLabel.textColor = .systemOrange
                 }
             }
         }
@@ -114,11 +167,8 @@ class KeyboardViewController: UIInputViewController {
 
     private func stopRecording() {
         isRecording = false
-        isTranscribing = true
         stopWaveformAnimation()
-        waveformView.isHidden = true
-        recordButton.setImage(UIImage(systemName: "ellipsis"), for: .normal)
-        statusLabel.text = "Transcribing..."
+        transitionToTranscribing()
 
         Task {
             if let data = recorder?.stopRecording() {
@@ -128,29 +178,113 @@ class KeyboardViewController: UIInputViewController {
                     await MainActor.run {
                         textDocumentProxy.insertText(processed)
                         let t = Transcription(text: processed, device: "iPhone Keyboard")
+                        // Write to shared store so iOS app sees it
+                        let store = MurmurStore()
+                        store.addTranscription(t)
+                        // Sync to other devices
                         syncService?.send(t)
-                        resetUI()
+                        transitionToIdle()
                     }
                 } catch {
                     await MainActor.run {
-                        statusLabel.text = "Error: \(error.localizedDescription)"
-                        resetUI()
+                        statusLabel.text = error.localizedDescription
+                        statusLabel.textColor = .systemOrange
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                            self?.transitionToIdle()
+                        }
                     }
                 }
             } else {
-                await MainActor.run {
-                    resetUI()
-                }
+                await MainActor.run { transitionToIdle() }
             }
         }
     }
 
-    private func resetUI() {
-        isTranscribing = false
-        recordButton.setImage(UIImage(systemName: MurmurTokens.Symbol.micIdle), for: .normal)
-        recordButton.backgroundColor = UIColor(MurmurTokens.recordButtonIdleFill)
-        statusLabel.text = "Tap to dictate"
+    // MARK: - State transitions
+
+    private func transitionToRecording() {
+        // Button becomes "Done"
+        var config = actionButton.configuration!
+        config.image = UIImage(systemName: MurmurTokens.Symbol.stop, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold))
+        config.attributedTitle = AttributedString("Done", attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .semibold)]))
+        actionButton.configuration = config
+
+        statusLabel.text = "Listening..."
+        statusLabel.textColor = .secondaryLabel
+        spinner.stopAnimating()
+
+        UIView.animate(withDuration: 0.3) {
+            self.waveformView.alpha = 1
+            self.timeLabel.alpha = 1
+        }
+
+        startTimeDisplay()
     }
+
+    private func transitionToTranscribing() {
+        var config = actionButton.configuration!
+        config.image = nil
+        config.attributedTitle = AttributedString("Transcribing", attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .semibold)]))
+        config.baseBackgroundColor = UIColor(MurmurTokens.accent).withAlphaComponent(0.5)
+        actionButton.configuration = config
+        actionButton.isEnabled = false
+
+        statusLabel.text = ""
+        spinner.startAnimating()
+        stopTimeDisplay()
+
+        UIView.animate(withDuration: 0.3) {
+            self.waveformView.alpha = 0
+            self.timeLabel.alpha = 0
+        }
+    }
+
+    private func transitionToIdle() {
+        isTranscribing = false
+        actionButton.isEnabled = true
+
+        var config = actionButton.configuration!
+        config.image = UIImage(systemName: MurmurTokens.Symbol.micIdle, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
+        config.attributedTitle = AttributedString("Dictate", attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 15, weight: .semibold)]))
+        config.baseBackgroundColor = UIColor(MurmurTokens.accent)
+        actionButton.configuration = config
+
+        statusLabel.text = "Tap to dictate"
+        statusLabel.textColor = .secondaryLabel
+        spinner.stopAnimating()
+
+        UIView.animate(withDuration: 0.3) {
+            self.waveformView.alpha = 0
+            self.timeLabel.alpha = 0
+        }
+
+        stopTimeDisplay()
+        recordingStart = nil
+    }
+
+    // MARK: - Elapsed time
+
+    private func startTimeDisplay() {
+        displayLink = CADisplayLink(target: self, selector: #selector(updateTime))
+        displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 1, maximum: 1)
+        displayLink?.add(to: .main, forMode: .common)
+    }
+
+    private func stopTimeDisplay() {
+        displayLink?.invalidate()
+        displayLink = nil
+        timeLabel.text = "0:00"
+    }
+
+    @objc private func updateTime() {
+        guard let start = recordingStart else { return }
+        let elapsed = Int(Date().timeIntervalSince(start))
+        let minutes = elapsed / 60
+        let seconds = elapsed % 60
+        timeLabel.text = String(format: "%d:%02d", minutes, seconds)
+    }
+
+    // MARK: - Waveform
 
     private func startWaveformAnimation() {
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in

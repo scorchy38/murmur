@@ -12,8 +12,10 @@
 		6456F65069B01263E84C4598 /* MurmurApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF06E0B8DF80D47C8FE8C61 /* MurmurApp.swift */; };
 		681E8570E5903CEF6F1556B6 /* MurmurKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F273232801C77CC23FD62950 /* MurmurKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		69E79FCABE24D2C319B319C7 /* MurmurKit in Frameworks */ = {isa = PBXBuildFile; productRef = 80B967291368F11454F6A77F /* MurmurKit */; };
+		7D6A6E1D3F5C8984746B06B4 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = BCB8F753AACA4565F501C8FA /* Secrets.plist */; };
 		835D50805DA157C89C990A9A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C6038B3B8752D9DF2A91B731 /* Assets.xcassets */; };
 		A9E6985403E45C5BA9CA7B85 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E719E6F4B385F7E647C9A7 /* ContentView.swift */; };
+		AB08F2C36A942ADFA6D548BA /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = BCB8F753AACA4565F501C8FA /* Secrets.plist */; };
 		B0CC3DC900C170D042A5B343 /* MurmurWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8C5593AF9AD6F1677E8A4C /* MurmurWatchApp.swift */; };
 		C3D56BBD76B19D81178A0F5A /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CEEE3BC1FF25590D5A9230 /* KeyboardViewController.swift */; };
 		DA48FCC9D6588BDEB64C3750 /* MurmurWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 9F18F7232BC2128DE48866F7 /* MurmurWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -73,6 +75,7 @@
 		A76A65B1EF599A23E948DC58 /* MurmurKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MurmurKit; path = ../MurmurKit; sourceTree = SOURCE_ROOT; };
 		B0DCE10C78FF02624996D781 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B9E719E6F4B385F7E647C9A7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		BCB8F753AACA4565F501C8FA /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		C07FE327C208A428E1B71E58 /* Murmur.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Murmur.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6038B3B8752D9DF2A91B731 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CFF06E0B8DF80D47C8FE8C61 /* MurmurApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MurmurApp.swift; sourceTree = "<group>"; };
@@ -140,6 +143,7 @@
 				09991D52456796A70BB955C9 /* Info.plist */,
 				2F02E41E04D3F805D91C8293 /* Murmur.entitlements */,
 				CFF06E0B8DF80D47C8FE8C61 /* MurmurApp.swift */,
+				BCB8F753AACA4565F501C8FA /* Secrets.plist */,
 			);
 			path = iOS;
 			sourceTree = "<group>";
@@ -288,6 +292,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				835D50805DA157C89C990A9A /* Assets.xcassets in Resources */,
+				AB08F2C36A942ADFA6D548BA /* Secrets.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -296,6 +301,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E31FCAE3C696AE313D0B8B8E /* Assets.xcassets in Resources */,
+				7D6A6E1D3F5C8984746B06B4 /* Secrets.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -523,6 +529,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Murmur;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Murmur needs microphone access to transcribe your voice.";
+				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.murmur.ios;
 				PRODUCT_BUNDLE_IDENTIFIER = com.murmur.ios.watch;
 				SDKROOT = watchos;
@@ -555,6 +562,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Murmur;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Murmur needs microphone access to transcribe your voice.";
+				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.murmur.ios;
 				PRODUCT_BUNDLE_IDENTIFIER = com.murmur.ios.watch;
 				SDKROOT = watchos;

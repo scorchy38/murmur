@@ -73,6 +73,7 @@ private final class SyncImpl: Sendable {
     nonisolated(unsafe) private var browser: NWBrowser?
     nonisolated(unsafe) private var connections: [(connection: NWConnection, name: String)] = []
     nonisolated(unsafe) private var knownEndpoints: Set<String> = []
+    nonisolated(unsafe) private var pendingIncomingNames: [String] = []
 
     init(
         serviceType: String,
@@ -121,7 +122,10 @@ private final class SyncImpl: Sendable {
             listener?.service = NWListener.Service(name: deviceName, type: serviceType)
 
             listener?.newConnectionHandler = { [weak self] connection in
-                self?.addConnection(connection, name: "peer")
+                let name = self?.pendingIncomingNames.isEmpty == false
+                    ? self!.pendingIncomingNames.removeFirst()
+                    : "peer"
+                self?.addConnection(connection, name: name)
             }
 
             listener?.stateUpdateHandler = { [weak self] state in
@@ -176,6 +180,7 @@ private final class SyncImpl: Sendable {
                     self.addConnection(connection, name: peerName)
                 } else {
                     log.info("[Sync] waiting for \(peerName) to initiate")
+                    self.pendingIncomingNames.append(peerName)
                 }
             }
         }

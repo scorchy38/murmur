@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 public enum RecordButtonState: Equatable, Sendable {
     case idle
@@ -38,6 +41,11 @@ public class MurmurStore: ObservableObject {
 
     public init() {
         load()
+        #if os(iOS)
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.load()
+        }
+        #endif
     }
 
     public func add(_ text: String, device: String) {

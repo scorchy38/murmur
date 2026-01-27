@@ -7,6 +7,7 @@ struct WatchContentView: View {
     @StateObject private var recorder = AudioRecorder()
     @State private var error: String?
     @State private var recordingStartDate: Date?
+    @State private var showingPeers = false
 
     private var buttonState: RecordButtonState {
         if store.isTranscribing { return .transcribing }
@@ -54,7 +55,34 @@ struct WatchContentView: View {
                 }
             }
             .padding()
+            .padding(.top, 8)
             .animation(MurmurTokens.Anim.stateTransition, value: buttonState)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingPeers = true
+                    } label: {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .foregroundStyle(syncService.isConnected ? Color.green : Color.secondary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingPeers) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if syncService.connectedPeers.isEmpty {
+                        Label("No peers connected", systemImage: "antenna.radiowaves.left.and.right.slash")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(syncService.connectedPeers, id: \.self) { peer in
+                            Label(peer, systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+                .font(.subheadline)
+                .padding()
+                .navigationTitle("Peers")
+            }
         }
         .onAppear {
             syncService.start { [weak store] transcription in
@@ -123,7 +151,7 @@ struct WatchHistoryView: View {
                             Image(systemName: "checkmark")
                             Text("Copied")
                         } else {
-                            Text(item.timeAgo)
+                            Text(item.timestamp, style: .relative)
                             Text("\u{00B7}")
                             Text(item.device)
                         }
@@ -167,4 +195,5 @@ struct WatchHistoryView: View {
 #Preview {
     WatchContentView()
         .environmentObject(MurmurStore())
+        .environmentObject(SyncService(deviceName: "Preview"))
 }
