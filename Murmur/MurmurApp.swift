@@ -175,8 +175,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func requestPermissions() {
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            print("[Murmur] Microphone: \(granted ? "✓" : "✗")")
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                print("[Murmur] Microphone: \(granted ? "✓" : "✗")")
+            }
+        case .authorized:
+            print("[Murmur] Microphone: ✓")
+        default:
+            print("[Murmur] Microphone: ✗")
         }
         print("[Murmur] Accessibility: \(AXIsProcessTrusted() ? "✓" : "✗")")
     }
@@ -278,18 +285,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.appState.store.addTranscription(transcription)
-
-                // Auto-copy to clipboard
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(transcription.text, forType: .string)
-
-                if self.appState.autoInsertText {
-                    TextInserter.paste()
-                }
-
-                if self.appState.soundsEnabled {
-                    NSSound(named: "Pop")?.play()
-                }
             }
         } onConnected: { [weak self] in
             // When a peer connects, send Mac's full history
