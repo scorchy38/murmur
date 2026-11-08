@@ -75,8 +75,15 @@ jobs:
             -archivePath build/Murmur.xcarchive \
             MARKETING_VERSION="${{ steps.version.outputs.version }}" \
             CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
+            ENABLE_HARDENED_RUNTIME=NO \
             CODE_SIGN_IDENTITY="-" \
             DEVELOPMENT_TEAM=""
+
+      # Ad-hoc builds have no Apple Team ID and cannot satisfy hardened
+      # runtime's same-team library validation for embedded frameworks.
+      # Keep the project default enabled for future certificate-signed builds.
+      - name: Launch archived Mac app and verify menu bar startup
+        run: python3 scripts/smoke-test-mac.py build/Murmur.xcarchive/Products/Applications/Murmur.app
 
       - name: Package drag-to-Applications installer
         run: |

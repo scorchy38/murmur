@@ -41,8 +41,12 @@ struct MenuBarView: View {
             } else {
                 Text("Less typing.\nMore thinking.")
                     .font(.system(size: 28, weight: .medium, design: .rounded)).tracking(-0.6)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Connect your speech account, then hold Shift to turn a thought into text.")
                     .font(.callout).foregroundStyle(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("Set up Murmur") { post(.openSettings) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
             }
@@ -80,6 +84,7 @@ struct MenuBarView: View {
         }
         .padding(22)
         .frame(width: 354)
+        .fixedSize(horizontal: false, vertical: true)
         .background(.regularMaterial)
     }
     private func post(_ notification: Notification.Name) { NotificationCenter.default.post(name: notification, object: nil) }

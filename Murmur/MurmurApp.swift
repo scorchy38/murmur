@@ -71,7 +71,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshPermissions() }
         }
-        settingsChanged()
+        let smokeTest = CommandLine.arguments.contains("--smoke-test")
+        if !smokeTest { settingsChanged() }
+        if smokeTest {
+            guard statusItem?.button?.image != nil else {
+                FileHandle.standardError.write(Data("Murmur menu bar initialization failed.\n".utf8))
+                exit(1)
+            }
+            FileHandle.standardOutput.write(Data("MURMUR_READY menu_bar=present\n".utf8))
+            NSApp.terminate(nil)
+        }
     }
 
     private func configureVoice() {
@@ -153,7 +162,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.button?.sendAction(on: [.leftMouseUp])
         popover = NSPopover()
         popover?.behavior = .transient
-        popover?.contentViewController = NSHostingController(rootView: MenuBarView(store: appState.store).environmentObject(appState))
+        let content = NSHostingController(rootView: MenuBarView(store: appState.store).environmentObject(appState))
+        content.sizingOptions = [.preferredContentSize]
+        popover?.contentViewController = content
     }
     @objc private func togglePopover() {
         guard let button = statusItem?.button else { return }

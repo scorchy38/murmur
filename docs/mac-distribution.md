@@ -84,3 +84,22 @@ and rejection of a payload modified after signing. The prior 13 shared voice tes
 remain unchanged. No GitHub release was published and no installed app was replaced.
 Live download/replacement from the public feed requires the first release built
 with this workflow.
+
+## Ad-hoc launch compatibility
+
+Ad-hoc archives must set `ENABLE_HARDENED_RUNTIME=NO`. An ad-hoc executable has
+no Apple signing Team ID, so hardened runtime's same-team library validation can
+reject the embedded Sparkle framework at launch even when `codesign --verify`
+reports an intact bundle. Certificate-signed builds keep the project's hardened
+runtime default enabled; this override applies to the current ad-hoc CI archive.
+
+The packaging script rejects the incompatible ad-hoc/runtime combination. CI also
+runs `scripts/smoke-test-mac.py` against the actual archived executable before
+packaging. The smoke check must reach initialized menu-bar UI, not merely pass a
+signature check. It disables update checks for that process and never starts
+microphone capture or local-network sync.
+
+The 2.0.1 repair was verified by launching both the archived executable and the
+installed `/Applications/Murmur.app`. System Events confirmed the running app's
+Murmur menu-bar item. A packaging regression check rejects the previous broken
+archive. A copy of the replaced local app is retained under `build/backups`.

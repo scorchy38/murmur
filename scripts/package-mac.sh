@@ -10,6 +10,13 @@ mkdir -p "$(dirname "$2")"
 output_path="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 command -v create-dmg >/dev/null || { echo 'Install create-dmg: brew install create-dmg' >&2; exit 1; }
 codesign --verify --deep --strict "$app_path"
+python3 - "$app_path" <<'PY'
+import re, subprocess, sys
+signature = subprocess.run(['codesign', '-dvv', sys.argv[1]], capture_output=True, text=True, check=True).stderr
+flags = re.search(r'flags=0x([0-9a-fA-F]+)', signature)
+if 'Signature=adhoc' in signature and flags and int(flags.group(1), 16) & 0x10000:
+    raise SystemExit('Ad-hoc app enables hardened runtime: embedded frameworks will fail library validation. Rebuild with ENABLE_HARDENED_RUNTIME=NO, or use a matching Apple signing identity.')
+PY
 staging="$(mktemp -d -t murmur-dmg)"
 trap 'rm -rf "$staging"' EXIT
 mkdir -p "$staging/payload"
