@@ -8,11 +8,19 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Label("Murmur", systemImage: "waveform")
+                Label {
+                    Text("Murmur")
+                } icon: {
+                    Image("StatusBarIcon")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                }
                     .font(.headline)
                 Spacer()
-                Circle().fill(appState.voiceEnabled ? Color.green : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
-                Text(appState.voiceEnabled ? "Ready" : "Set up")
+                Circle().fill(appState.voiceEnabled ? (appState.shortcutListening ? Color.green : Color.orange) : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                Text(appState.voiceEnabled ? (appState.shortcutListening ? "Ready" : "Shortcut setup") : "Set up")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if appState.isActive {
@@ -27,6 +35,15 @@ struct MenuBarView: View {
                     if appState.isRecording { Button("Finish") { post(.stopRecording) }.buttonStyle(.borderedProminent) }
                 }
             } else if appState.voiceEnabled {
+                if !appState.shortcutListening {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(appState.accessibilityGranted ? "The Shift shortcut couldn’t start. Check Murmur’s Accessibility access." : "Allow Accessibility access so Murmur can hear the Shift shortcut outside the app.")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Allow Shift shortcut") { post(.openShortcutPermissions) }
+                            .buttonStyle(.bordered)
+                    }
+                }
                 HStack(spacing: 10) {
                     ShortcutBadge()
                     VStack(alignment: .leading, spacing: 3) {
@@ -75,8 +92,13 @@ struct MenuBarView: View {
                 Button("Library", systemImage: "text.book.closed") { post(.openLibrary) }
                 Spacer()
                 Button { post(.openSettings) } label: { Image(systemName: "gearshape") }
+                    .buttonStyle(.plain)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
                     .help("Settings").accessibilityLabel("Settings")
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
+                    .buttonStyle(.plain)
+                    .frame(width: 28, height: 28)
                     .help("Quit Murmur").accessibilityLabel("Quit Murmur")
             }
             .buttonStyle(.borderless).foregroundStyle(.secondary)

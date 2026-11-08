@@ -37,6 +37,7 @@ struct SettingsView: View {
         }
         .frame(minWidth: 650, minHeight: 530)
         .onAppear { if !appState.hasCredential { selection = "Connection" } }
+        .onReceive(NotificationCenter.default.publisher(for: .selectUpdateSettings)) { _ in selection = "Updates" }
         .onDisappear { testStream?.cancel(); testStream = nil; enableTask?.cancel(); enableTask = nil; enabling = false; testing = false; apiKey = "" }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in appState.refreshPermissions() }
     }
@@ -85,6 +86,10 @@ struct SettingsView: View {
             Section("Permissions") {
                 permissionRow("Microphone", granted: appState.microphoneGranted, path: "Privacy_Microphone")
                 permissionRow("Accessibility", granted: appState.accessibilityGranted, path: "Privacy_Accessibility")
+                if appState.voiceEnabled && !appState.shortcutListening {
+                    Text("Shift is waiting for Accessibility access. After granting it, Murmur reconnects the shortcut automatically. If Murmur is already allowed after replacing the app, turn its Accessibility switch off and on again.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 Text("Accessibility enables the Shift gesture and safe text insertion. You can also record from the menu bar.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -211,7 +216,7 @@ struct SettingsView: View {
         guard let key = VoiceCredential.read() else { return }
         testing = true
         connectionStatus = nil
-        let stream = NativeVoiceStream(credential: key, language: VoiceLanguage.resolve(appState.language).code, vocabulary: [])
+        let stream = NativeVoiceStream(credential: key, language: VoiceLanguage.resolve(appState.language).code, vocabulary: [], keepaliveEnabled: false)
         testStream = stream
         stream.onEvent = { event in
             switch event {
@@ -227,6 +232,7 @@ struct SettingsView: View {
         stream.start()
     }
     private func enable() {
+        guard !enabling, !appState.isActive else { return }
         savingError = nil
         guard let key = VoiceCredential.read() else { savingError = "Save your API key in Connection first."; return }
         enabling = true

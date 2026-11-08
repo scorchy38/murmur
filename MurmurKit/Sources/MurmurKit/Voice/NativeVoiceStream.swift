@@ -16,12 +16,14 @@ public final class NativeVoiceStream: VoiceStreaming {
     private let credential: String
     private let language: String
     private let vocabulary: [String]
+    private let keepaliveEnabled: Bool
     private var socket: URLSessionWebSocketTask?
     private var session: URLSession?
     private var receiveTask: Task<Void, Never>?
     private var sender: Task<Void, Never>?
     private var setupDeadline: Task<Void, Never>?
     private var keepalive: Task<Void, Never>?
+    private var pendingPing: VoicePingCompletion?
     private var queue: [Data] = []
     private var queuedBytes = 0
     private var ready = false
@@ -31,10 +33,11 @@ public final class NativeVoiceStream: VoiceStreaming {
     private var started = false
     private var normalizer = VoiceProviderNormalizer()
 
-    public init(credential: String, language: String, vocabulary: [String]) {
+    public init(credential: String, language: String, vocabulary: [String], keepaliveEnabled: Bool = true) {
         self.credential = credential
         self.language = VoiceLanguage.resolve(language).code
         self.vocabulary = VoiceVocabulary.sanitized(vocabulary)
+        self.keepaliveEnabled = keepaliveEnabled
     }
 
     public static func setup(language: String, vocabulary: [String]) -> [String: Any] {
@@ -86,15 +89,16 @@ public final class NativeVoiceStream: VoiceStreaming {
                         self.ready = true
                         self.setupDeadline?.cancel()
                         self.keepalive = Task { [weak self] in
+                            guard self?.keepaliveEnabled == true else { return }
                             while !Task.isCancelled {
                                 guard let self, !self.cancelled else { return }
                                 do {
                                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                                        socket.sendPing { error in
-                                            if let error { continuation.resume(throwing: error) }
-                                            else { continuation.resume() }
-                                        }
+                                        let completion = VoicePingCompletion(continuation)
+                                        self.pendingPing = completion
+                                        socket.sendPing { error in completion.complete(error) }
                                     }
+                                    self.pendingPing = nil
                                 }
                                 catch { if !self.cancelled { self.fail(.connection) }; return }
                                 try? await Task.sleep(for: .seconds(8))
@@ -178,6 +182,8 @@ public final class NativeVoiceStream: VoiceStreaming {
         onEvent = nil
         setupDeadline?.cancel()
         keepalive?.cancel()
+        pendingPing?.complete(CancellationError())
+        pendingPing = nil
         receiveTask?.cancel()
         sender?.cancel()
         socket?.cancel(with: .normalClosure, reason: nil)
@@ -190,7 +196,7 @@ public final class NativeVoiceStream: VoiceStreaming {
 
     /// An admitted setup check never captures or sends microphone audio.
     public static func check(credential: String, language: String) async throws {
-        let stream = NativeVoiceStream(credential: credential, language: language, vocabulary: [])
+        let stream = NativeVoiceStream(credential: credential, language: language, vocabulary: [], keepaliveEnabled: false)
         let events = AsyncStream<VoiceEvent> { continuation in
             stream.onEvent = { event in continuation.yield(event) }
         }
@@ -210,6 +216,24 @@ public final class NativeVoiceStream: VoiceStreaming {
         } onCancel: {
             Task { @MainActor in stream.cancel() }
         }
+    }
+}
+
+/// URLSession may deliver a pong and a cancellation error for the same ping.
+/// Take ownership under a lock before resuming, including explicit cancellation.
+final class VoicePingCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    init(_ continuation: CheckedContinuation<Void, Error>) { self.continuation = continuation }
+    func complete(_ error: Error?) {
+        let pending = lock.withLock {
+            let pending = continuation
+            continuation = nil
+            return pending
+        }
+        guard let pending else { return }
+        if let error { pending.resume(throwing: error) }
+        else { pending.resume() }
     }
 }
 

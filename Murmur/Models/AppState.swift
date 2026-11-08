@@ -14,9 +14,10 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
     @Published var notice: String?
     @Published var completedText = ""
-    @Published var hasCredential = VoiceCredential.read() != nil
+    @Published var hasCredential = VoiceCredential.isStored
     @Published var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     @Published var accessibilityGranted = AXIsProcessTrusted()
+    @Published var shortcutListening = false
     @Published var voiceEnabled: Bool
     @Published var connectionReady = false
     @Published var isRecoveredText = false
@@ -56,7 +57,7 @@ final class AppState: ObservableObject {
         Logger(subsystem: "com.murmur", category: "Voice").info("enablement_changed enabled=\(enabled)")
     }
     func refreshPermissions() {
-        let credential = VoiceCredential.read() != nil
+        let credential = VoiceCredential.isStored
         let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         let accessibility = AXIsProcessTrusted()
         if hasCredential != credential { hasCredential = credential }

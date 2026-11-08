@@ -10,6 +10,9 @@ extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
     static let openLibrary = Notification.Name("openLibrary")
     static let voiceSettingsChanged = Notification.Name("voiceSettingsChanged")
+    static let checkForUpdates = Notification.Name("checkForUpdates")
+    static let selectUpdateSettings = Notification.Name("selectUpdateSettings")
+    static let openShortcutPermissions = Notification.Name("openShortcutPermissions")
 }
 
 @main
@@ -58,6 +61,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         observe(.openSettings) { $0.openSettingsWindow() }
         observe(.openLibrary) { $0.openLibraryWindow() }
+        observe(.openShortcutPermissions) { delegate in
+            delegate.popover?.performClose(nil)
+            _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        observe(.checkForUpdates) { delegate in
+            delegate.openSettingsWindow()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .selectUpdateSettings, object: nil)
+                delegate.updater.check()
+            }
+        }
         observe(.voiceSettingsChanged) { $0.settingsChanged() }
         observe(NSApplication.didBecomeActiveNotification) { $0.refreshPermissions() }
         observe(NSApplication.didResignActiveNotification) { delegate in
@@ -156,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem?.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Murmur")
+        updateIcon()
         statusItem?.button?.target = self
         statusItem?.button?.action = #selector(togglePopover)
         statusItem?.button?.sendAction(on: [.leftMouseUp])
@@ -172,8 +189,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         else { popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY) }
     }
     private func updateIcon() {
-        let symbol = appState.isRecording ? "waveform.circle.fill" : appState.isTranscribing ? "ellipsis.circle" : "waveform"
-        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: appState.isRecording ? "Murmur: listening" : appState.isTranscribing ? "Murmur: processing" : "Murmur")
+        guard let mark = NSImage(named: "StatusBarIcon") else { return }
+        let size = NSSize(width: 18, height: 18)
+        let recording = appState.isRecording
+        let processing = appState.isTranscribing
+        let icon = NSImage(size: size, flipped: false) { rect in
+            mark.draw(in: rect)
+            if recording || processing, let context = NSGraphicsContext.current?.cgContext {
+                // A transparent separation keeps the tiny state badge readable
+                // without replacing Murmur's mark with a different symbol.
+                let badge = recording ? CGRect(x: 12, y: 0, width: 6, height: 6) : CGRect(x: 9, y: 0, width: 9, height: 5)
+                context.setBlendMode(.clear)
+                context.fillEllipse(in: badge)
+                context.setBlendMode(.normal)
+                context.setFillColor(NSColor.black.cgColor)
+                if recording {
+                    context.fillEllipse(in: CGRect(x: 13, y: 1, width: 4, height: 4))
+                } else {
+                    for x in [10.0, 13.0, 16.0] {
+                        context.fillEllipse(in: CGRect(x: x, y: 1.5, width: 1.5, height: 1.5))
+                    }
+                }
+            }
+            return true
+        }
+        icon.isTemplate = true
+        icon.accessibilityDescription = recording ? "Murmur: listening" : processing ? "Murmur: processing" : "Murmur"
+        statusItem?.button?.image = icon
     }
     private func openSettingsWindow() {
         popover?.performClose(nil)
@@ -205,8 +247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window
     }
     private func settingsChanged() {
-        if !appState.voiceEnabled { voice.cancel(); hotkey.stopListening() }
-        else if appState.accessibilityGranted { hotkey.startListening() }
+        if !appState.voiceEnabled { voice.cancel() }
+        refreshShortcut()
         if appState.syncEnabled && !syncing {
             syncing = true
             sync.start { [weak self] item in
@@ -220,8 +262,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private func refreshPermissions() {
         appState.refreshPermissions()
-        if appState.voiceEnabled && appState.accessibilityGranted { hotkey.startListening() }
-        else if !appState.accessibilityGranted { hotkey.stopListening() }
+        refreshShortcut()
+    }
+    private func refreshShortcut() {
+        let listening: Bool
+        if appState.voiceEnabled && appState.accessibilityGranted { listening = hotkey.startListening() }
+        else { hotkey.stopListening(); listening = false }
+        if appState.shortcutListening != listening { appState.shortcutListening = listening }
     }
     private func observe(_ name: Notification.Name, center: NotificationCenter = .default, action: @escaping (AppDelegate) -> Void) {
         observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in

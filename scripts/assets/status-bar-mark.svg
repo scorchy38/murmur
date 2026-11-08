@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="607" height="563" viewBox="-20 -20 607 563">
+  <!-- Small-size tracing of the original M/glass mark. The inner opening is
+       rounded before the tail so its contour cannot cut across the tail. -->
+  <path fill="none" fill-rule="evenodd" stroke="black"
+        stroke-width="27" stroke-linecap="round" stroke-linejoin="round"
+        d="M 30,508
+           C 10,500 8,482 20,448
+           C 38,394 20,345 7,304
+           C -4,240 0,181 22,123
+           C 45,62 85,4 131,3
+           C 188,-5 203,37 234,92
+           C 264,143 285,152 311,140
+           C 343,125 363,49 396,19
+           C 427,-8 485,3 515,43
+           C 550,99 565,162 565,222
+           C 565,299 547,354 499,404
+           C 455,453 397,485 344,497
+           C 275,513 220,478 171,490
+           C 117,486 74,522 30,508 Z
+           M 135,409
+           C 147,386 147,365 138,330
+           C 122,278 125,236 151,222
+           C 174,207 188,228 205,258
+           C 224,293 233,319 259,327
+           C 294,339 325,312 350,278
+           C 371,247 379,217 401,218
+           C 427,217 448,251 439,302
+           C 429,352 382,394 315,400
+           C 275,408 245,392 204,395
+           C 181,396 158,404 143,413
+           C 136,417 131,417 135,409 Z"/>
+</svg>

@@ -131,3 +131,34 @@ excludes the development fixture entry point. YAML parsing and diff whitespace c
 pass. The installed CI app was not replaced. Supplier/device end-to-end acceptance has
 not been performed with a user-entered Gemini key; the preview must complete that check
 before being described as production validated.
+
+## Enable-dictation crash repair (2.0.3)
+
+The 2.0.2 crash was symbolicated to the WebSocket ping callback resuming a checked
+continuation twice after setup-check cancellation. Ping completion now takes the
+continuation under a lock before resuming it; cancellation settles any pending
+ping, and subsequent pong/error callbacks are ignored. Short connection checks do
+not start a recurring keepalive. Recording sessions retain their keepalive with
+the same protected cancellation path.
+
+Regression tests cover success followed by cancellation/error, cancellation
+followed by success, and simultaneous callbacks (100 iterations of eight callbacks).
+All 16 shared and 19 native tests pass. The installed 2.0.3 build completed the
+actual Enable Dictation flow using the saved credential: the local microphone probe
+and speech setup succeeded, enabled intent persisted, and the process stayed alive.
+This is setup-path validation, not a claim that speech transcription itself was tested.
+
+Startup and periodic permission refresh also now use a non-interactive Keychain
+metadata lookup rather than reading the secret. Secret reads occur on explicit
+connection or recording actions, so background checks cannot raise an unlock prompt.
+
+## Global shortcut admission
+
+Microphone permission and a working speech credential enable menu-bar recording;
+receiving Shift outside the app additionally requires macOS Accessibility access.
+The menu reports “Shortcut setup” until `CGEvent.tapCreate` actually succeeds, and
+provides an explicit Accessibility action instead of claiming that Shift is ready.
+The application refreshes that grant every three seconds and reconnects the event
+tap after approval. macOS requires the user to grant Accessibility; the app does
+not alter the privacy database. Ad-hoc app replacements may require toggling the
+existing Murmur entry off and on to refresh its identity.

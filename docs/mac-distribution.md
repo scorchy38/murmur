@@ -103,3 +103,17 @@ The 2.0.1 repair was verified by launching both the archived executable and the
 installed `/Applications/Murmur.app`. System Events confirmed the running app's
 Murmur menu-bar item. A packaging regression check rejects the previous broken
 archive. A copy of the replaced local app is retained under `build/backups`.
+
+## Before the first update feed is published
+
+A GitHub release containing only the legacy ZIP/IPA does not provide a Sparkle
+appcast. Before starting Sparkle, Murmur probes the configured feed with an
+8-second request timeout and a 10-second resource bound. A 404 displays an inline
+“Updates aren’t published yet” explanation; it does not open an error dialog or
+claim the app is up to date. Network failures clear checking state and allow retry.
+The app retries feed discovery hourly while automatic checks are enabled; once a
+feed is available, Sparkle owns the normal update schedule.
+
+The menu's update action opens Settings → Updates so results have a visible home.
+The gear button only opens Settings. Neither action publishes a release. The feed
+becomes available when the updated Release workflow publishes its signed artifacts.

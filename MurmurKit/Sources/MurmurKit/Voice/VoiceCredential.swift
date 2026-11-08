@@ -8,6 +8,15 @@ public enum VoiceCredential {
     private static var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
     }
+    /// Settings/status refresh must not unlock or read the saved secret.
+    public static var isStored: Bool {
+        var lookup = query
+        lookup[kSecReturnAttributes as String] = true
+        lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+        lookup[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        let status = SecItemCopyMatching(lookup as CFDictionary, nil)
+        return status == errSecSuccess || status == errSecInteractionNotAllowed
+    }
     public static func read() -> String? {
         var query = query
         query[kSecReturnData as String] = true
