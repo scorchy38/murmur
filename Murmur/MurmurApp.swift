@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey = HotkeyManager()
     private let sync = SyncService(deviceName: "Mac")
     private var syncing = false
+    private let updater = AppUpdater.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if NSClassFromString("XCTestCase") != nil { return }
@@ -46,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         NSApp.setActivationPolicy(.accessory)
         setupMenuBar()
+        updater.isBusy = { [weak self] in self?.appState.isActive == true || self?.appState.warmingUp == true }
+        updater.start()
         configureVoice()
         observe(.startRecording) { $0.startRecording() }
         observe(.stopRecording) { $0.voice.finish() }
@@ -75,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voice.onPresentation = { [weak self] in
             guard let self else { return }
             self.updateIcon()
+            DispatchQueue.main.async { [weak self] in self?.updater.resumeWhenIdle() }
             if self.appState.isActive || self.appState.lastError != nil || !self.appState.completedText.isEmpty {
                 self.overlay.show()
                 if !self.appState.isActive, self.appState.completedText.isEmpty { self.overlay.dismiss(after: 10) }
@@ -106,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else if !recovered { self.appState.notice = "Copied to your clipboard. Edit here or paste when you’re ready." }
             self.inserter.clear()
         }
-        voice.onCancel = { [weak self] in self?.inserter.clear(); self?.overlay.hide(); self?.updateIcon() }
+        voice.onCancel = { [weak self] in self?.inserter.clear(); self?.overlay.hide(); self?.updateIcon(); self?.updater.resumeWhenIdle() }
         hotkey.enabled = { [weak self] in
             guard let self else { return false }
             // Native modal dialogs own their keys, including modifier gestures.
@@ -122,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.appState.warmingUp = warming
             if warming { self.overlay.show() }
             else if !self.appState.isActive { self.overlay.hide() }
+            if !warming { DispatchQueue.main.async { [weak self] in self?.updater.resumeWhenIdle() } }
         }
         hotkey.onStart = { [weak self] in self?.startRecording() }
         hotkey.onFinish = { [weak self] in self?.voice.finish() }

@@ -76,6 +76,7 @@ struct MenuBarView: View {
                     .help("Quit Murmur").accessibilityLabel("Quit Murmur")
             }
             .buttonStyle(.borderless).foregroundStyle(.secondary)
+            CheckForUpdatesButton().buttonStyle(.borderless).font(.callout)
         }
         .padding(22)
         .frame(width: 354)

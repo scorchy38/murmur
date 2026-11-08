@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: murmur-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-26
@@ -17,7 +21,22 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen create-dmg
+
+      - name: Set release versions
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          match = re.fullmatch(r'v?(\d+\.\d+\.\d+)(?:[-+][A-Za-z0-9.-]+)?', os.environ['RELEASE_TAG'])
+          if not match:
+              raise SystemExit('Release tags must be versions such as v2.0.1')
+          build = 1000 + int(os.environ['GITHUB_RUN_NUMBER'])
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={match.group(1)}\nbuild={build}.{os.environ["GITHUB_RUN_ATTEMPT"]}\n')
+          PY
 
       - name: Create placeholder Secrets.plist
         run: |
@@ -54,13 +73,36 @@ jobs:
             -scheme Murmur \
             -destination 'generic/platform=macOS' \
             -archivePath build/Murmur.xcarchive \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
             CODE_SIGN_IDENTITY="-" \
             DEVELOPMENT_TEAM=""
 
-      - name: Package macOS zip
+      - name: Package drag-to-Applications installer
         run: |
-          cp -R build/Murmur.xcarchive/Products/Applications/Murmur.app build/Murmur.app
-          cd build && zip -r Murmur-Mac.zip Murmur.app
+          scripts/package-mac.sh build/Murmur.xcarchive/Products/Applications/Murmur.app build/Murmur-Mac.dmg
+
+      - name: Fetch pinned Sparkle signing tool
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/sparkle
+          gh release download 2.10.1 --repo sparkle-project/Sparkle --pattern Sparkle-2.10.1.tar.xz --dir build/sparkle
+          echo '1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27  build/sparkle/Sparkle-2.10.1.tar.xz' | shasum -a 256 -c -
+          tar -xf build/sparkle/Sparkle-2.10.1.tar.xz -C build/sparkle
+
+      - name: Sign and verify update feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY" || { echo 'Missing update-signing key'; exit 1; }
+          python3 scripts/make-appcast.py \
+            --app build/Murmur.xcarchive/Products/Applications/Murmur.app \
+            --dmg build/Murmur-Mac.dmg \
+            --tag "$RELEASE_TAG" \
+            --sign-tool build/sparkle/bin/sign_update \
+            --output build/appcast.xml
 
       # ── iOS ────────────────────────────────────────────────
 
@@ -107,5 +149,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/Murmur-Mac.zip
+            build/Murmur-Mac.dmg
+            build/appcast.xml
             build/Murmur.ipa

@@ -28,5 +28,17 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Murmur needs microphone access to transcribe your voice.</string>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/scorchy38/murmur/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>Pt8mrPg7kL1z5+2p17b/o4GX/14SVPEqRuIMI7WfezQ=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 </dict>
 </plist>

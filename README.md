@@ -56,15 +56,17 @@ Download the latest build from [Releases](../../releases).
 
 ### Mac
 
-1. Unzip **Murmur-Mac.zip**
-2. Drag **Murmur.app** to your Applications folder
-3. First launch: right-click the app → **Open** (bypasses Gatekeeper)
+1. Open **Murmur-Mac.dmg**
+2. Drag **Murmur** onto **Applications**, then eject the Murmur disk
+3. Open Murmur from Applications (first launch: right-click → **Open** if macOS asks)
 4. Open Murmur’s menu bar → **Set up Murmur** → **Connection**, save your Gemini API key, and enable dictation
 5. Allow Microphone access; grant Accessibility in **Settings → Dictation** for the Shift gesture and text insertion
 6. Hold **Shift** alone for a moment, speak, then release to finish. Press **Escape** to cancel
 7. Review or copy the result if your original field changed or does not support safe insertion
 
 The Mac minimum remains macOS 14, with native Liquid Glass on macOS 26 and a material fallback on earlier supported versions. A different ad-hoc build can require macOS privacy permissions to be granted again.
+
+Mac builds check GitHub releases automatically and verify signed updates before installation. Manage this under **Settings → Updates**, or use **Check for Updates…** in the menu bar. Installing the new updater-enabled version is a one-time manual step. See [Mac distribution and release setup](docs/mac-distribution.md).
 
 ### iPhone
 

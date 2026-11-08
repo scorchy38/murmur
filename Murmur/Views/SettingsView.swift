@@ -22,11 +22,13 @@ struct SettingsView: View {
                 Label("Dictation", systemImage: "waveform").tag("Dictation")
                 Label("Connection", systemImage: "key").tag("Connection")
                 Label("Privacy", systemImage: "hand.raised").tag("Privacy")
+                Label("Updates", systemImage: "arrow.triangle.2.circlepath").tag("Updates")
             }
             .navigationSplitViewColumnWidth(165)
         } detail: {
             Form {
-                if selection == "Connection" { connection }
+                if selection == "Updates" { UpdateSettingsView() }
+                else if selection == "Connection" { connection }
                 else if selection == "Privacy" { privacy }
                 else { dictation }
             }

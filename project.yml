@@ -7,6 +7,9 @@ options:
   generateEmptyDirectories: true
 
 packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
   MurmurKit:
     path: MurmurKit
 
@@ -32,6 +35,7 @@ targets:
           - "**/Secrets.plist.example"
     dependencies:
       - package: MurmurKit
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.murmur.app
@@ -46,6 +50,12 @@ targets:
       properties:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        SUFeedURL: https://github.com/scorchy38/murmur/releases/latest/download/appcast.xml
+        SUPublicEDKey: Pt8mrPg7kL1z5+2p17b/o4GX/14SVPEqRuIMI7WfezQ=
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
+        SUScheduledCheckInterval: 3600
+        SUVerifyUpdateBeforeExtraction: true
         LSUIElement: true
         NSMicrophoneUsageDescription: "Murmur needs microphone access to transcribe your voice."
         LSApplicationCategoryType: "public.app-category.productivity"
