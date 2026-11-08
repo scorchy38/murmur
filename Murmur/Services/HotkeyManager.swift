@@ -7,6 +7,7 @@ import MurmurKit
 final class HotkeyManager {
     var enabled: () -> Bool = { false }
     var mode: () -> VoiceMode = { .hold }
+    var activationDelay: () -> Double = { 2.0 }
     var isActive: () -> Bool = { false }
     var canCancel: () -> Bool = { false }
     var onWarmup: (Bool) -> Void = { _ in }
@@ -87,10 +88,13 @@ final class HotkeyManager {
             if mode() == .hold {
                 guard !isActive() else { blocked = true; return false }
                 warmup = Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(160))
-                    guard !Task.isCancelled, let self, self.shiftDown, !self.blocked, self.enabled() else { return }
+                    guard let self else { return }
+                    let configured = self.activationDelay()
+                    let delay = configured.isFinite ? min(3.0, max(1.0, configured)) : 2.0
+                    try? await Task.sleep(for: .seconds(delay - 0.7))
+                    guard !Task.isCancelled, self.shiftDown, !self.blocked, self.enabled() else { return }
                     self.onWarmup(true)
-                    try? await Task.sleep(for: .milliseconds(240))
+                    try? await Task.sleep(for: .milliseconds(700))
                     guard !Task.isCancelled, self.shiftDown, !self.blocked, self.enabled() else { return }
                     self.admitted = true
                     self.onWarmup(false)

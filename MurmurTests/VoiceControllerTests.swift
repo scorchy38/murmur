@@ -36,6 +36,8 @@ final class VoiceControllerTests: XCTestCase {
         let recorder = FakeCapture(); let stream = FakeStream()
         let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test-credential" }, authorize: { true })
         var completed: [String] = []
+        var usage: VoiceUsageSession?
+        controller.onUsageSnapshot = { usage = $0 }
         controller.onComplete = { text, _ in completed.append(text) }
         controller.start(); await settle()
         let audio = Data(repeating: 4, count: 3200)
@@ -52,6 +54,9 @@ final class VoiceControllerTests: XCTestCase {
         stream.onEvent?(.endpoint)
         try? await Task.sleep(for: .milliseconds(180))
         XCTAssertEqual(completed, ["rename CacheManager"])
+        XCTAssertEqual(usage?.words, 2)
+        XCTAssertEqual(usage?.attempts.first?.estimatedOutputTokens, 5)
+        XCTAssertEqual(VoiceUsageTotals(sessions: usage.map { [$0] } ?? []).estimatedInputTokens, 3)
         XCTAssertEqual(state.recordingState, .idle)
         XCTAssertTrue(stream.cancelled)
         controller.dispose()
@@ -151,6 +156,9 @@ final class VoiceControllerTests: XCTestCase {
         obsoleteCallback?(.failure(.connection))
         try? await Task.sleep(for: .milliseconds(320))
         obsoleteCallback?(.failure(.credentials))
+        obsoleteCallback?(.usage(VoiceUsage(inputTokens: 100, outputTokens: 20)))
+        XCTAssertEqual(state.attempts[0].usage?.inputTokens, 100)
+        XCTAssertNil(state.attempts[1].usage)
         XCTAssertNil(state.lastError)
         XCTAssertEqual(streams.count, 2)
         obsoleteCallback?(.interim("recognized before reconnect"))
@@ -192,6 +200,27 @@ final class VoiceControllerTests: XCTestCase {
         XCTAssertTrue(stream.finished)
         XCTAssertTrue(state.audioLevels.allSatisfy { $0 == 0 })
         controller.cancel()
+    }
+
+    func testUsageSnapshotsKeepLatestReceiptAndCancellationOnlyOnce() async {
+        let state = AppState(); state.voiceEnabled = true
+        let recorder = FakeCapture(); let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        var snapshots: [VoiceUsageSession] = []
+        controller.onUsageSnapshot = { snapshots.append($0) }
+        controller.start(); await settle()
+        recorder.onAudio?(Data(repeating: 4, count: 32_000)); await settle()
+        stream.onEvent?(.usage(VoiceUsage(inputTokens: 100, outputTokens: 20)))
+        stream.onEvent?(.usage(VoiceUsage(inputTokens: 200, outputTokens: 40)))
+        controller.cancel()
+        controller.dispose()
+        stream.onEvent?(.usage(VoiceUsage(inputTokens: 900, outputTokens: 900)))
+        XCTAssertEqual(Set(snapshots.map(\.id)).count, 1)
+        XCTAssertEqual(snapshots.filter { $0.outcome != "active" }.count, 1)
+        XCTAssertEqual(snapshots.last?.outcome, "cancelled")
+        XCTAssertEqual(snapshots.last?.duration, 1)
+        XCTAssertEqual(snapshots.last?.words, 0)
+        XCTAssertEqual(snapshots.last?.attempts.first?.usage?.inputTokens, 200)
     }
 
 }

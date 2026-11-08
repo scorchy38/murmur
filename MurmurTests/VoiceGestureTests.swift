@@ -37,10 +37,10 @@ final class VoiceGestureTests: XCTestCase {
         manager.onFinish = { finishes += 1 }
         manager.onWarmup = { warming = $0 }
         _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: .maskShift))
-        try? await Task.sleep(for: .milliseconds(210))
+        try? await Task.sleep(for: .milliseconds(1500))
         XCTAssertTrue(warming)
         XCTAssertEqual(starts, 0)
-        try? await Task.sleep(for: .milliseconds(260))
+        try? await Task.sleep(for: .milliseconds(700))
         XCTAssertEqual(starts, 1)
         _ = manager.handle(.flagsChanged, event: event(.flagsChanged))
         XCTAssertEqual(finishes, 1)
@@ -78,6 +78,24 @@ final class VoiceGestureTests: XCTestCase {
         manager.onCancel = { cancelled = true }
         _ = manager.handle(.tapDisabledByTimeout, event: event(.keyDown))
         XCTAssertTrue(cancelled)
+    }
+
+    func testQuestionMarkTypingDoesNotActivateOrFlashWarmup() async {
+        let manager = HotkeyManager()
+        manager.enabled = { true }
+        var starts = 0
+        var hints = 0
+        manager.onStart = { starts += 1 }
+        manager.onWarmup = { if $0 { hints += 1 } }
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: .maskShift))
+        try? await Task.sleep(for: .milliseconds(1000))
+        XCTAssertEqual(starts, 0)
+        XCTAssertEqual(hints, 0)
+        _ = manager.handle(.keyDown, event: event(.keyDown, key: 44, flags: .maskShift))
+        try? await Task.sleep(for: .milliseconds(1200))
+        XCTAssertEqual(starts, 0)
+        XCTAssertEqual(hints, 0)
+        manager.reset()
     }
 
 }

@@ -24,7 +24,7 @@ struct MenuBarView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             if appState.isActive {
-                Text(appState.isRecording ? "Listening to your next thought." : "Finishing your thought…")
+                Text(appState.isRecording ? "Listening to your prompt." : "Finishing your prompt…")
                     .font(.title3.weight(.medium))
                 if !appState.interimTranscript.isEmpty {
                     Text(appState.interimTranscript).lineLimit(3).foregroundStyle(.secondary)
@@ -48,7 +48,7 @@ struct MenuBarView: View {
                     ShortcutBadge()
                     VStack(alignment: .leading, spacing: 3) {
                         Text(appState.mode == .hold ? "Hold Shift. Speak freely." : "Tap Shift. Speak freely.").font(.callout.weight(.medium))
-                        Text("Your words appear where you work.").font(.caption).foregroundStyle(.secondary)
+                        Text(appState.shadowMode ? "Shadow Mode · Clipboard only" : "Your words appear where you work.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Button { post(.startRecording) } label: {
@@ -60,7 +60,7 @@ struct MenuBarView: View {
                     .font(.system(size: 28, weight: .medium, design: .rounded)).tracking(-0.6)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Connect your speech account, then hold Shift to turn a thought into text.")
+                Text("Connect your speech account, then hold Shift to dictate a prompt.")
                     .font(.callout).foregroundStyle(.secondary)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
@@ -75,8 +75,14 @@ struct MenuBarView: View {
             Divider()
             if let latest = store.transcriptions.first {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("LAST THOUGHT").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundStyle(.secondary)
-                    Text(latest.text).font(.callout).lineLimit(3).textSelection(.enabled)
+                    Text("LAST PROMPT").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundStyle(.secondary)
+                    Text(latest.text)
+                        .font(.callout)
+                        .lineLimit(3)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, maxHeight: 54, alignment: .topLeading)
+                        .clipped()
                     HStack {
                         Text(latest.timestamp, style: .relative).font(.caption2).foregroundStyle(.tertiary)
                         Spacer()

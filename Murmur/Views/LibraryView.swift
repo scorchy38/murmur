@@ -18,14 +18,22 @@ struct LibraryView: View {
         NavigationSplitView {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "waveform").foregroundStyle(Color.accentColor).font(.title2)
+                    Image("StatusBarIcon").renderingMode(.template).resizable().scaledToFit().frame(width: 24, height: 24).foregroundStyle(Color.accentColor)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Your thoughts").font(.headline)
-                        Text("A little less between you and your words.").font(.caption2).foregroundStyle(.secondary)
+                        Text("Prompts").font(.headline)
+                        Text("Your dictation history").font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
                 .padding(20)
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search prompts", text: $search)
+                        .textFieldStyle(.plain)
+                }
+                .padding(10)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+                .padding(.horizontal, 16).padding(.bottom, 8)
                 List(selection: $selected) {
                     ForEach(items) { item in
                         VStack(alignment: .leading, spacing: 6) {
@@ -45,7 +53,6 @@ struct LibraryView: View {
                     }
                 }
                 .listStyle(.sidebar)
-                .searchable(text: $search, prompt: "Find a thought")
                 HStack {
                     Text("\(store.transcriptions.count) saved").font(.caption).foregroundStyle(.secondary)
                     Spacer()
@@ -54,46 +61,57 @@ struct LibraryView: View {
                 }
                 .padding(16)
             }
-            .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 360)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 320)
         } detail: {
             if let entry {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.timestamp, format: .dateTime.month(.wide).day().hour().minute()).font(.headline)
+                            Text(entry.timestamp, format: .dateTime.month(.wide).day().hour().minute())
+                                .font(.headline).lineLimit(1)
                             Text("Captured on \(entry.device)").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") { copy(draft); copied = true }
                             .buttonStyle(.borderedProminent)
-                        ShareLink(item: draft) { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share text")
+                            .fixedSize()
+                        ShareLink(item: draft) { Image(systemName: "square.and.arrow.up") }
+                            .buttonStyle(.bordered).accessibilityLabel("Share prompt")
                     }
                     Divider()
                     TextEditor(text: $draft)
-                        .font(.system(size: 23, weight: .regular, design: .rounded))
+                        .font(.system(size: 19, weight: .regular))
                         .scrollContentBackground(.hidden)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .accessibilityLabel("Editable copy of saved transcription")
                     HStack {
-                        Text("Edits here are a working copy.").font(.caption).foregroundStyle(.tertiary)
+                        Text("Edits here are a working copy.").font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                         Spacer()
                         Button("Delete", role: .destructive) { store.delete(id: entry.id); selected = nil }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.borderless).fixedSize()
                     }
                 }
-                .padding(32)
+                .padding(24)
+                .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 22) {
                     Image(systemName: "waveform").font(.system(size: 46, weight: .ultraLight)).foregroundStyle(Color.accentColor)
-                    Text("Make room\nfor a thought.")
-                        .font(.system(size: 48, weight: .medium, design: .rounded)).tracking(-1.8).multilineTextAlignment(.center)
-                    Text(store.transcriptions.isEmpty ? "Hold Shift to speak. We’ll take care of the words." : "Choose a thought to revisit, edit, or share.")
+                    Text("Your prompts,\nready to use.")
+                        .font(.system(size: 36, weight: .medium, design: .rounded)).tracking(-1.8).multilineTextAlignment(.center)
+                    Text(store.transcriptions.isEmpty ? "Hold Shift to speak. We’ll take care of the words." : "Choose a prompt to read, edit, or share.")
                         .foregroundStyle(.secondary).multilineTextAlignment(.center)
                     HStack(spacing: 10) { ShortcutBadge(); Text("Hold to speak").font(.callout).foregroundStyle(.secondary) }
                         .padding(12).voiceGlass(cornerRadius: 16)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(32)
+                .padding(24)
+                .frame(minWidth: 520)
             }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 900, idealWidth: 1080, minHeight: 580, idealHeight: 720)
+        .onAppear {
+            if selected == nil { selected = store.transcriptions.first?.id; draft = entry?.text ?? "" }
         }
         .onChange(of: selected) { _, _ in draft = entry?.text ?? ""; copied = false }
         .toolbar {

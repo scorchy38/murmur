@@ -264,7 +264,7 @@ public struct VoiceProviderNormalizer {
             }
         }
         if let usage = json["usageMetadata"] as? [String: Any] {
-            result.append(.usage(VoiceUsage(totalTokens: usage["totalTokenCount"] as? Int)))
+            result.append(.usage(VoiceUsage(totalTokens: usage["totalTokenCount"] as? Int, inputTokens: usage["promptTokenCount"] as? Int, outputTokens: usage["responseTokenCount"] as? Int ?? usage["candidatesTokenCount"] as? Int, thinkingTokens: usage["thoughtsTokenCount"] as? Int)))
         }
         if json["goAway"] != nil { result.append(.failure(.limit)) }
         return result

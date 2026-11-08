@@ -162,3 +162,44 @@ The application refreshes that grant every three seconds and reconnects the even
 tap after approval. macOS requires the user to grant Accessibility; the app does
 not alter the privacy database. Ad-hoc app replacements may require toggling the
 existing Murmur entry off and on to refresh its identity.
+
+## Shadow Mode and interaction polish (2.1)
+
+Settings → Dictation includes optional **Shadow Mode**. It suppresses all center-screen
+panels, including warmup, processing and result review. Completed nonempty text still
+passes through the existing automatic clipboard copy, then skips external insertion
+and closes any overlay. Recording/processing state stays visible in the menu bar;
+Escape and Ctrl+C still cancel without an overlay. Errors remain available in the
+menu. The setting defaults off, and is disabled during an active recording so a
+session cannot change its delivery mode midway through.
+
+Hold activation now defaults to two seconds, with 1.5-, 2-, 2.5- and 3-second choices.
+Warmup appears only during the final 700 milliseconds. Another key cancels admission,
+so Shift-plus-punctuation within the ordinary typing interval does not start capture
+or flash a hint. The hint has a single-line intrinsic size, and its hosting panel
+keeps the screen's bounds rather than shrinking to the hint's fitting size.
+
+History UI calls recordings **prompts**. The menu preview is a non-selectable,
+three-line, clipped excerpt; Copy still copies the complete prompt. The Library
+opens at 1080 × 720 with a 900 × 580 minimum content size, a bounded 240–320-point
+sidebar and at least 520 points for the editor. It selects the latest prompt on
+opening, offers a visible search field, and keeps long text inside a scrolling
+editor. Real-window fixtures cover long menu text, the minimum-size Library with
+a long selected prompt, and the warmup hint.
+
+Launch at login defaults on for new/unconfigured preferences. The installed release
+registers the main application through SMAppService; smoke tests and development
+fixtures do not. An explicit off choice is saved and respected. Settings reports
+required macOS approval or registration failure instead of treating a requested
+preference as proof of successful registration.
+
+
+### Local usage accounting (2.1 build 7)
+
+Settings → Usage tracks completed-text word counts, captured dictation duration (including pauses), completed prompts, a seven-day word chart, current streak, longest prompt, and estimated typing time saved at 40 WPM minus recording time. Today, seven-day and all-tracked filters apply to totals; the activity chart always shows the past seven days.
+
+The local versioned ledger lives in Application Support/Murmur/Usage/usage-v1.json, independently of the 50-item prompt history. It retains no transcript/audio, writes atomically with private permissions, replaces cumulative per-connection receipts instead of summing snapshots, and preserves cancelled/retried/replayed connection usage. Active entries become interrupted after restart. Corrupt/unknown-version ledgers are preserved and the UI reports a storage error. Previews, smoke launches and tests never open the real ledger.
+
+Gemini 3.5 Transcribe Live list rates verified against https://ai.google.dev/gemini-api/docs/pricing on 2026-11-08: USD 3.50/M audio input tokens and USD 21/M text output tokens including separately reported thoughts. Rate snapshots are persisted per recording; monetary aggregation uses Decimal. Reported token counts take precedence. When receipts are absent, estimate audio at 25 tokens/second from bytes queued per connection and final text at roughly 4 characters/token. Older tracked prompts fall back to roughly 1⅓ tokens per word. Estimates never become supplier receipts; partial reported counts replace only their corresponding estimates. Queued audio may exceed delivered audio after a failed connection. These are explicitly labeled approximations, and unavailable unfinalized output remains unknown. Setup checks, other apps/devices, taxes, credits and free-tier billing are outside this local estimate. Old recordings cannot reliably be backfilled. The Google AI Studio usage link is the account-level source of truth.
+
+Build 8 diagnostic: a short synthetic TTS prompt returned authoritative inputTranscription and generationComplete but no usageMetadata during an additional 18-second drain. Thus ordinary successful sessions can lack receipts for this model; the UI now surfaces heuristic estimates immediately rather than an empty cost panel. Timing displays minutes and seconds and exposes the 40-WPM typing baseline. Delayed receipts from a superseded connection attach to its originating attempt, never the newer attempt. No diagnostic speech was captured from the user; no transcript or key was logged.

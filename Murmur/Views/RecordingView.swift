@@ -22,7 +22,9 @@ struct RecordingView: View {
                     HStack(spacing: 10) {
                         ShortcutBadge()
                         Text("Keep holding…").font(.callout.weight(.medium))
+                            .lineLimit(1).fixedSize()
                     }
+                    .fixedSize(horizontal: true, vertical: true)
                     .padding(14)
                     .voiceGlass(cornerRadius: 20)
                     .padding(.bottom, 72)
@@ -50,6 +52,7 @@ struct RecordingView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { editedText = appState.completedText }
         .onChange(of: appState.completedText) { _, text in editedText = text; copied = false }
         .animation(reducedMotion ? nil : .easeInOut(duration: 0.2), value: appState.recordingState)
@@ -61,7 +64,7 @@ struct RecordingView: View {
             Image(systemName: appState.isRecording ? "waveform" : appState.isTranscribing ? "ellipsis" : appState.lastError != nil ? "exclamationmark.circle" : "checkmark")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(appState.lastError != nil ? Color.orange : Color.accentColor)
-            Text(appState.isRecording ? "Listening" : appState.isTranscribing ? "Finishing your thought" : appState.completedText.isEmpty ? "Let’s try that again" : "Your words, ready")
+            Text(appState.isRecording ? "Listening" : appState.isTranscribing ? "Finishing your prompt" : appState.completedText.isEmpty ? "Let’s try that again" : "Your words, ready")
                 .font(.system(size: 15, weight: .semibold))
             Spacer()
             if appState.isRecording, let start = appState.recordingStartDate {
@@ -91,7 +94,7 @@ struct RecordingView: View {
                     if reducedMotion { Image(systemName: "ellipsis").font(.title2) }
                     else { ProgressView().controlSize(.small) }
                 }
-                Text(appState.isRecording ? "A thought. A message.\nWhatever’s on your mind." : appState.isTranscribing ? "Making room for the last word…" : "Your next thought starts here.")
+                Text(appState.isRecording ? "A prompt. A message.\nWhatever you need to say." : appState.isTranscribing ? "Making room for the last word…" : "Your next prompt starts here.")
                     .font(.system(size: 32, weight: .regular, design: .rounded))
                     .tracking(-0.7)
                     .foregroundStyle(.secondary)

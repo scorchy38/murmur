@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		00392263BF1F13D599791D5A /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC82B5DCE3D7045884CF6CA /* RecordingView.swift */; };
+		0737CC2A74A6709745F2BC1E /* ShadowModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 639B69EEA827CC537808441D /* ShadowModeTests.swift */; };
 		1950BDF0067EFE703A46E74C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */; };
+		1B0673F74E49EF86FB71E15D /* UsageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46249B3E4CE4AB77BD151E18 /* UsageSettingsView.swift */; };
 		1F12DDB04A231CD7CD75D0C1 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9B8270CDC9FC480BE0EF838 /* LibraryView.swift */; };
 		35CDF1321C948962CFAEB964 /* VoiceControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71A2C0BB10E25870F5FD7FB /* VoiceControllerTests.swift */; };
 		469D73F8430F2E6A7CA18DEC /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56A6EBFC85FCFA930C7A68B /* AppUpdater.swift */; };
@@ -25,7 +27,9 @@
 		B3A4BCD226A7B82FCA96F964 /* VoiceGestureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4E74D37B8F7542EC1EA5B9 /* VoiceGestureTests.swift */; };
 		B4D8103FCCABC838148E820D /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6148183B2E20F406F12862BD /* VoicePreview.swift */; };
 		CCA6160297EC5A1677B8106D /* MurmurKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7E5A870AA24834D2C5AF68DA /* MurmurKit */; };
+		D9F0A9B9B79DD62B57B8C356 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A927CC6C8A6AF138E317A4A /* UsageStore.swift */; };
 		DEFF573F9E683FAFA2AABDC5 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7154915D7172F8ABCCE9E06 /* AppState.swift */; };
+		E18A17C76645051940912D86 /* UsageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F275A191E2AB9027E457FE4 /* UsageStoreTests.swift */; };
 		E3224DAF7DCD65D9C362A023 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CAC8BA3E17B715F2C60228 /* AudioRecorder.swift */; };
 		EA9E5FA908E62066269556A8 /* AppUpdaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 222842F55366013AAB46AAB2 /* AppUpdaterTests.swift */; };
 		F749E8DCCC47751933645208 /* VoiceDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162309A9DA0DF8AE9F829BB6 /* VoiceDesign.swift */; };
@@ -51,12 +55,16 @@
 		222842F55366013AAB46AAB2 /* AppUpdaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdaterTests.swift; sourceTree = "<group>"; };
 		2817413F3EED5052DF0C4BCE /* MurmurKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MurmurKit; path = MurmurKit; sourceTree = SOURCE_ROOT; };
 		3F6970843BC72FAB69835D24 /* OverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayController.swift; sourceTree = "<group>"; };
+		46249B3E4CE4AB77BD151E18 /* UsageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSettingsView.swift; sourceTree = "<group>"; };
 		6148183B2E20F406F12862BD /* VoicePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreview.swift; sourceTree = "<group>"; };
+		639B69EEA827CC537808441D /* ShadowModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShadowModeTests.swift; sourceTree = "<group>"; };
 		66DAB6EC735DF4C0BD2DCE4A /* VoiceAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAudioTests.swift; sourceTree = "<group>"; };
 		705220A3846AC6270FEBBC24 /* Murmur.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Murmur.entitlements; sourceTree = "<group>"; };
+		7A927CC6C8A6AF138E317A4A /* UsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStore.swift; sourceTree = "<group>"; };
 		8DA97DB724FFAF06909BA9FC /* UpdateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSettingsView.swift; sourceTree = "<group>"; };
 		9956F6FDABD559B1B729C6B3 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		9BF889621049D4E0393F1E2F /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		9F275A191E2AB9027E457FE4 /* UsageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStoreTests.swift; sourceTree = "<group>"; };
 		AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BA0E563F85E519D1E62A21CB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C56A6EBFC85FCFA930C7A68B /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
@@ -149,6 +157,7 @@
 				0DC82B5DCE3D7045884CF6CA /* RecordingView.swift */,
 				AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */,
 				8DA97DB724FFAF06909BA9FC /* UpdateSettingsView.swift */,
+				46249B3E4CE4AB77BD151E18 /* UsageSettingsView.swift */,
 				162309A9DA0DF8AE9F829BB6 /* VoiceDesign.swift */,
 				6148183B2E20F406F12862BD /* VoicePreview.swift */,
 				ACF23C98CF19FFEDBB2E4AE0 /* Components */,
@@ -195,6 +204,8 @@
 			isa = PBXGroup;
 			children = (
 				222842F55366013AAB46AAB2 /* AppUpdaterTests.swift */,
+				639B69EEA827CC537808441D /* ShadowModeTests.swift */,
+				9F275A191E2AB9027E457FE4 /* UsageStoreTests.swift */,
 				66DAB6EC735DF4C0BD2DCE4A /* VoiceAudioTests.swift */,
 				D71A2C0BB10E25870F5FD7FB /* VoiceControllerTests.swift */,
 				DB4E74D37B8F7542EC1EA5B9 /* VoiceGestureTests.swift */,
@@ -206,6 +217,7 @@
 			isa = PBXGroup;
 			children = (
 				D7154915D7172F8ABCCE9E06 /* AppState.swift */,
+				7A927CC6C8A6AF138E317A4A /* UsageStore.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -325,6 +337,8 @@
 				1950BDF0067EFE703A46E74C /* SettingsView.swift in Sources */,
 				796BC8C0FC65B20CA8DA78D1 /* TextInserter.swift in Sources */,
 				875EDB44E3C298A6740E36E1 /* UpdateSettingsView.swift in Sources */,
+				1B0673F74E49EF86FB71E15D /* UsageSettingsView.swift in Sources */,
+				D9F0A9B9B79DD62B57B8C356 /* UsageStore.swift in Sources */,
 				FBA80D1F4BCB7C1E156628AE /* VoiceController.swift in Sources */,
 				F749E8DCCC47751933645208 /* VoiceDesign.swift in Sources */,
 				B4D8103FCCABC838148E820D /* VoicePreview.swift in Sources */,
@@ -336,6 +350,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				EA9E5FA908E62066269556A8 /* AppUpdaterTests.swift in Sources */,
+				0737CC2A74A6709745F2BC1E /* ShadowModeTests.swift in Sources */,
+				E18A17C76645051940912D86 /* UsageStoreTests.swift in Sources */,
 				9B44E20E73B1EE92F61F1CA1 /* VoiceAudioTests.swift in Sources */,
 				35CDF1321C948962CFAEB964 /* VoiceControllerTests.swift in Sources */,
 				B3A4BCD226A7B82FCA96F964 /* VoiceGestureTests.swift in Sources */,
@@ -433,7 +449,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 8;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = ZHCT595PYJ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -448,7 +464,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.3;
+				MARKETING_VERSION = 2.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -511,7 +527,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 8;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = ZHCT595PYJ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -532,7 +548,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.3;
+				MARKETING_VERSION = 2.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

@@ -89,7 +89,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.refreshPermissions() }
         }
         let smokeTest = CommandLine.arguments.contains("--smoke-test")
-        if !smokeTest { settingsChanged() }
+        if !smokeTest {
+            appState.usageStore.open()
+            settingsChanged()
+            #if !DEBUG
+            appState.configureLoginItem()
+            #endif
+        }
         if smokeTest {
             guard statusItem?.button?.image != nil else {
                 FileHandle.standardError.write(Data("Murmur menu bar initialization failed.\n".utf8))
@@ -101,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureVoice() {
+        voice.onUsageSnapshot = { [weak self] session in self?.appState.usageStore.record(session) }
         voice.onPresentation = { [weak self] in
             guard let self else { return }
             self.updateIcon()
@@ -119,6 +126,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Clipboard is the explicit fallback, and remains available after review.
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
+            if self.appState.shadowMode {
+                self.appState.notice = "Copied to clipboard."
+                self.overlay.hide()
+                self.inserter.clear()
+                return
+            }
             if self.appState.autoInsertText && !recovered {
                 switch self.inserter.insert(text) {
                 case .inserted:
@@ -144,8 +157,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 (self.appState.mode != .tap || self.appState.isActive || TextInserter.tapEligible())
         }
         hotkey.mode = { [weak self] in self?.appState.mode ?? .hold }
+        hotkey.activationDelay = { [weak self] in self?.appState.holdDelay ?? 2.0 }
         hotkey.isActive = { [weak self] in self?.appState.isActive == true }
-        hotkey.canCancel = { [weak self] in self?.overlay.isVisible == true }
+        hotkey.canCancel = { [weak self] in
+            guard let self else { return false }
+            return self.appState.isActive || self.appState.warmingUp || self.overlay.isVisible
+        }
         hotkey.onWarmup = { [weak self] warming in
             guard let self else { return }
             guard self.appState.warmingUp != warming else { return }
@@ -167,7 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !appState.isActive else { return }
         popover?.performClose(nil)
         overlay.hide()
-        inserter.capture()
+        if appState.shadowMode { inserter.clear() }
+        else { inserter.capture() }
         voice.start()
     }
 
@@ -230,23 +248,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover?.performClose(nil)
         if !appState.isActive { overlay.hide() }
         if libraryWindow == nil {
-            libraryWindow = makeWindow(title: "Murmur", size: NSSize(width: 980, height: 680), content: LibraryView(store: appState.store).environmentObject(appState))
+            libraryWindow = makeWindow(title: "Murmur", size: NSSize(width: 1080, height: 720), minimumSize: NSSize(width: 900, height: 580), content: LibraryView(store: appState.store).environmentObject(appState))
         }
         NSApp.activate(ignoringOtherApps: true)
         libraryWindow?.makeKeyAndOrderFront(nil)
     }
-    private func makeWindow<Content: View>(title: String, size: NSSize, content: Content) -> NSWindow {
+    private func makeWindow<Content: View>(title: String, size: NSSize, minimumSize: NSSize = NSSize(width: 650, height: 460), content: Content) -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = title
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
         window.contentViewController = NSHostingController(rootView: content)
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: min(650, size.width), height: 460)
+        window.contentMinSize = minimumSize
+        window.setContentSize(size)
         window.center()
         return window
     }
     private func settingsChanged() {
+        if appState.shadowMode { overlay.hide() }
         if !appState.voiceEnabled { voice.cancel() }
         refreshShortcut()
         if appState.syncEnabled && !syncing {
@@ -262,6 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private func refreshPermissions() {
         appState.refreshPermissions()
+        appState.refreshLoginItemStatus()
         refreshShortcut()
     }
     private func refreshShortcut() {

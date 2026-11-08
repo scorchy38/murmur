@@ -16,6 +16,7 @@ final class OverlayController {
     var isVisible: Bool { !panels.isEmpty }
 
     func show() {
+        guard !state.shadowMode else { hide(); return }
         dismissTask?.cancel()
         if panels.isEmpty {
             let pointer = NSEvent.mouseLocation
@@ -32,11 +33,15 @@ final class OverlayController {
                 panel.isMovable = false
                 panel.animationBehavior = .none
                 if screen == active {
-                    panel.contentView = NSHostingView(rootView: RecordingView(availableHeight: screen.visibleFrame.height).environmentObject(state))
+                    let content = NSHostingView(rootView: RecordingView(availableHeight: screen.visibleFrame.height).environmentObject(state))
+                    content.sizingOptions = []
+                    content.autoresizingMask = [.width, .height]
+                    panel.contentView = content
                 } else {
                     panel.contentView = NSHostingView(rootView: Color.black.opacity(0.08).ignoresSafeArea())
                     panel.ignoresMouseEvents = true
                 }
+                panel.setFrame(screen.frame, display: false)
                 panels.append(panel)
                 panel.orderFrontRegardless()
             }

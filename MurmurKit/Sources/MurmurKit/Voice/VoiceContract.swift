@@ -11,10 +11,12 @@ public enum VoiceSettings {
     }
 }
 
-public struct VoiceAttemptSummary: Equatable, Sendable, Identifiable {
-    public let id = UUID()
+public struct VoiceAttemptSummary: Codable, Equatable, Sendable, Identifiable {
+    public var id = UUID()
     public var queuedAudioBytes = 0
     public var reportedTokens: Int?
+    public var usage: VoiceUsage?
+    public var estimatedOutputTokens: Int?
     public var outcome = "active"
     public init() {}
 }
@@ -55,9 +57,20 @@ public enum VoiceEvent: Equatable, Sendable {
     case closed
 }
 
-public struct VoiceUsage: Equatable, Sendable {
+public struct VoiceUsage: Codable, Equatable, Sendable {
     public var totalTokens: Int?
-    public init(totalTokens: Int? = nil) { self.totalTokens = totalTokens }
+    public var inputTokens: Int?
+    public var outputTokens: Int?
+    public var thinkingTokens: Int?
+    public init(totalTokens: Int? = nil, inputTokens: Int? = nil, outputTokens: Int? = nil, thinkingTokens: Int? = nil) {
+        self.totalTokens = totalTokens.flatMap { $0 >= 0 ? $0 : nil }
+        self.inputTokens = inputTokens.flatMap { $0 >= 0 ? $0 : nil }
+        self.outputTokens = outputTokens.flatMap { $0 >= 0 ? $0 : nil }
+        self.thinkingTokens = thinkingTokens.flatMap { $0 >= 0 ? $0 : nil }
+    }
+    /// Supplier receipts are cumulative snapshots within each connection.
+    public var billedOutputTokens: Int? { outputTokens.map { $0 + (thinkingTokens ?? 0) } }
+    public var hasCostReceipt: Bool { inputTokens != nil && outputTokens != nil }
 }
 
 public struct VoiceTranscript: Equatable, Sendable {

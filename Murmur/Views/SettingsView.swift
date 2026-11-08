@@ -14,13 +14,13 @@ struct SettingsView: View {
     @State private var enabling = false
     @State private var testStream: (any VoiceStreaming)?
     @State private var enableTask: Task<Void, Never>?
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
                 Label("Dictation", systemImage: "waveform").tag("Dictation")
                 Label("Connection", systemImage: "key").tag("Connection")
+                Label("Usage", systemImage: "chart.bar.xaxis").tag("Usage")
                 Label("Privacy", systemImage: "hand.raised").tag("Privacy")
                 Label("Updates", systemImage: "arrow.triangle.2.circlepath").tag("Updates")
             }
@@ -29,6 +29,7 @@ struct SettingsView: View {
             Form {
                 if selection == "Updates" { UpdateSettingsView() }
                 else if selection == "Connection" { connection }
+                else if selection == "Usage" { UsageSettingsView(store: appState.usageStore) }
                 else if selection == "Privacy" { privacy }
                 else { dictation }
             }
@@ -47,8 +48,8 @@ struct SettingsView: View {
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("A shortcut to your thoughts").font(.headline)
-                        Text("Hold Shift, speak, then release. Your words take shape in a live preview.")
+                        Text("A shortcut to your prompts").font(.headline)
+                        Text("Hold Shift, speak, then release to finish your prompt.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -63,11 +64,27 @@ struct SettingsView: View {
                 if let savingError { Text(savingError).font(.caption).foregroundStyle(.orange) }
             }
             Section("How you speak") {
+                Toggle("Shadow Mode", isOn: $appState.shadowMode)
+                    .disabled(appState.isActive)
+                    .onChange(of: appState.shadowMode) { _, _ in changed() }
+                Text("Dictate without the center-screen overlay. Completed text is copied to your clipboard, ready to paste. The menu bar icon still shows recording and processing; Escape cancels.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Picker("Gesture", selection: $appState.voiceMode) {
                     Text("Hold Shift").tag("hold")
                     Text("Tap Shift to start / finish").tag("tap")
                 }
                 .disabled(appState.isActive)
+                if appState.mode == .hold {
+                    Picker("Hold delay", selection: $appState.holdDelay) {
+                        Text("1.5 seconds").tag(1.5)
+                        Text("2 seconds (default)").tag(2.0)
+                        Text("2.5 seconds").tag(2.5)
+                        Text("3 seconds").tag(3.0)
+                    }
+                    .disabled(appState.isActive)
+                    Text("A brief Shift press keeps working for capitals and punctuation. Hold Shift alone for the selected delay to start dictation.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if appState.mode == .tap {
                     Text("The tap gesture starts in an empty text field. Tap Shift again to finish; your words stay editable.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -79,7 +96,8 @@ struct SettingsView: View {
                 }
                 .disabled(appState.isActive)
                 Toggle("Insert into the original text field", isOn: $appState.autoInsertText)
-                Text("Murmur inserts only if the original field and selection are unchanged. Otherwise, review and copy the result. Dictation never sends a message for you.")
+                    .disabled(appState.shadowMode)
+                Text(appState.shadowMode ? "Shadow Mode sends completed text to the clipboard. Your insertion preference is saved for when Shadow Mode is off." : "Murmur inserts only if the original field and selection are unchanged. Otherwise, review and copy the result. Dictation never sends a message for you.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Play start and finish sounds", isOn: $appState.soundsEnabled)
             }
@@ -94,12 +112,16 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        do {
-                            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-                        } catch { savingError = "Launch at login could not be updated."; launchAtLogin = SMAppService.mainApp.status == .enabled }
-                    }
+                Toggle("Launch at login", isOn: Binding(get: { appState.launchAtLoginRequested }, set: appState.setLaunchAtLogin))
+                LabeledContent("Login status", value: appState.loginItemStatus == .enabled ? "Enabled" : appState.loginItemStatus == .requiresApproval ? "Awaiting approval" : "Not enabled")
+                if appState.loginItemStatus == .requiresApproval {
+                    Text("Allow Murmur in Login Items to finish enabling launch at login.").font(.caption).foregroundStyle(.secondary)
+                    Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
+                }
+                if let error = appState.loginItemError {
+                    Text(error).font(.caption).foregroundStyle(.orange)
+                    Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
+                }
             }
         }
     }

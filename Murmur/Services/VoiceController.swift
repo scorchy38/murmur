@@ -34,6 +34,9 @@ final class VoiceController {
     private var noDataTimer: Task<Void, Never>?
     private var inactivityTimer: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
+    private var usageID: UUID?
+    private var lastCheckpoint = Date.distantPast
+    var onUsageSnapshot: ((VoiceUsageSession) -> Void)?
     var onPresentation: (() -> Void)?
     var onComplete: ((String, Bool) -> Void)?
     var onCancel: (() -> Void)?
@@ -75,6 +78,8 @@ final class VoiceController {
         state.connectionReady = false
         state.audioLevels = Array(repeating: 0, count: 16)
         startDate = Date()
+        usageID = UUID()
+        lastCheckpoint = .distantPast
         state.recordingStartDate = startDate
         state.recordingState = .recording
         onPresentation?()
@@ -134,6 +139,7 @@ final class VoiceController {
         guard state.isActive || state.warmingUp else { return }
         generation = UUID()
         settleAttempt("cancelled")
+        checkpoint(outcome: "cancelled")
         cleanup()
         transcript = VoiceTranscript()
         state.interimTranscript = ""
@@ -149,6 +155,7 @@ final class VoiceController {
     func dispose() {
         generation = UUID()
         settleAttempt("disposed")
+        checkpoint(outcome: "interrupted")
         cleanup()
         state.recordingState = .idle
         state.warmingUp = false
@@ -161,6 +168,7 @@ final class VoiceController {
         let connection = attempt
         state.currentAttemptCount += 1
         state.attempts.append(VoiceAttemptSummary())
+        let summaryID = state.attempts.last!.id
         state.connectionReady = false
         inputClosed = false
         let language = VoiceLanguage.resolve(state.language)
@@ -171,6 +179,19 @@ final class VoiceController {
             guard let self, self.generation == owner else {
                 if event == .ready { stream?.cancel() }
                 return
+            }
+            if let index = self.state.attempts.firstIndex(where: { $0.id == summaryID }) {
+                if case .text(let text) = event {
+                    self.state.attempts[index].estimatedOutputTokens = VoiceUsageSession.estimateTextTokens(text)
+                }
+                if case .usage(let receipt) = event {
+                    self.state.attempts[index].usage = receipt
+                    self.state.attempts[index].reportedTokens = receipt.totalTokens
+                    let receipts = self.state.attempts.compactMap(\.reportedTokens)
+                    self.state.lastUsageTokens = receipts.isEmpty ? nil : receipts.reduce(0, +)
+                    self.checkpoint()
+                    return
+                }
             }
             // Text belongs to the recording. Connection readiness and failure
             // belong to the attempt, so stale errors cannot restart a new one.
@@ -184,6 +205,7 @@ final class VoiceController {
             }
             self.event(event, owner: owner)
         }
+        checkpoint()
         stream.start()
         voiceLog.info("stream_attempt \(connection)")
     }
@@ -192,6 +214,7 @@ final class VoiceController {
         guard generation == owner, state.isRecording || drainingCapture, !data.isEmpty else { return }
         guard data.count.isMultiple(of: 2), data.count <= 1_048_576 else { failCapture(.unsupported); return }
         totalBytes += data.count
+        if Date().timeIntervalSince(lastCheckpoint) >= 1 { checkpoint() }
         // Eight-minute product cap, below the supplier's ten-minute lifetime.
         guard totalBytes <= VoiceAudio.bytesPerSecond * 480 else {
             state.notice = "Recording limit reached. Finishing your text."
@@ -243,12 +266,7 @@ final class VoiceController {
             transcript.accept(event)
             state.interimTranscript = transcript.preview
             if state.isTranscribing && inputClosed { completeSoon(owner: owner) }
-        case .usage(let receipt):
-            if let last = state.attempts.indices.last {
-                state.attempts[last].reportedTokens = receipt.totalTokens
-                let receipts = state.attempts.compactMap(\.reportedTokens)
-                state.lastUsageTokens = receipts.isEmpty ? nil : receipts.reduce(0, +)
-            }
+        case .usage: break // Accounted against the originating connection above.
         case .failure(let failure):
             if !failure.isFatal, !transcript.receivedText, !retried, state.isRecording {
                 retried = true
@@ -301,6 +319,7 @@ final class VoiceController {
         }
         generation = UUID()
         settleAttempt(state.lastError != nil ? "error" : usedSalvage ? "salvaged" : "completed")
+        checkpoint(outcome: text.isEmpty ? "empty" : "completed", words: VoiceUsageSession.countWords(text))
         cleanup()
         state.recordingState = .idle
         state.interimTranscript = ""
@@ -359,6 +378,12 @@ final class VoiceController {
         })
     }
     private func cancelTimers() { timers.forEach { $0.cancel() }; timers.removeAll() }
+    private func checkpoint(outcome: String = "active", words: Int = 0) {
+        guard let id = usageID else { return }
+        onUsageSnapshot?(VoiceUsageSession(id: id, startedAt: startDate, duration: Double(totalBytes) / Double(VoiceAudio.bytesPerSecond), words: words, outcome: outcome, attempts: state.attempts))
+        lastCheckpoint = Date()
+        if outcome != "active" { usageID = nil }
+    }
     private func cleanup() {
         recorder.stop()
         stream?.cancel(); stream = nil
