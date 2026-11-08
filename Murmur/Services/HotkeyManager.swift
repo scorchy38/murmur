@@ -1,108 +1,128 @@
-import Cocoa
-import Carbon
+import AppKit
+import MurmurKit
 
-/// Global hotkey using Carbon API (the reliable way)
-/// Hotkey: Ctrl+Space
-class HotkeyManager {
-    private var onKeyDown: () -> Void
-    private var onKeyUp: () -> Void
-    private var hotKeyRef: EventHotKeyRef?
-    private var eventHandler: EventHandlerRef?
-    private var isPressed = false
+/// A native modifier gesture. Shift keeps its ordinary typing behavior; another
+/// key during warmup cancels admission, so capitals and Shift shortcuts still work.
+@MainActor
+final class HotkeyManager {
+    var enabled: () -> Bool = { false }
+    var mode: () -> VoiceMode = { .hold }
+    var isActive: () -> Bool = { false }
+    var canCancel: () -> Bool = { false }
+    var onWarmup: (Bool) -> Void = { _ in }
+    var onStart: () -> Void = {}
+    var onFinish: () -> Void = {}
+    var onCancel: () -> Void = {}
+    private var tap: CFMachPort?
+    private var source: CFRunLoopSource?
+    private var warmup: Task<Void, Never>?
+    private var shiftDown = false
+    private var admitted = false
+    private var blocked = false
+    private var pressedAt = Date.distantPast
+    private var lastTap = Date.distantPast
 
-    private static var instance: HotkeyManager?
-
-    init(onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void) {
-        self.onKeyDown = onKeyDown
-        self.onKeyUp = onKeyUp
-        HotkeyManager.instance = self
+    @discardableResult
+    func startListening() -> Bool {
+        if tap != nil { return true }
+        let mask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue)
+        let callback: CGEventTapCallBack = { _, type, event, info in
+            guard let info else { return Unmanaged.passUnretained(event) }
+            return MainActor.assumeIsolated {
+                let manager = Unmanaged<HotkeyManager>.fromOpaque(info).takeUnretainedValue()
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let tap = manager.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+                    _ = manager.handle(type, event: event)
+                    return Unmanaged.passUnretained(event)
+                }
+                return manager.handle(type, event: event) ? nil : Unmanaged.passUnretained(event)
+            }
+        }
+        guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: CGEventMask(mask), callback: callback, userInfo: Unmanaged.passUnretained(self).toOpaque()) else { return false }
+        self.tap = tap
+        source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        return true
     }
 
-    func startListening() {
-        // Register for hot key pressed event
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-
-        let handler: EventHandlerUPP = { (nextHandler, event, userData) -> OSStatus in
-            HotkeyManager.instance?.handleHotKeyPressed()
-            return noErr
+    func handle(_ type: CGEventType, event: CGEvent) -> Bool {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            reset()
+            if isActive() { onCancel() }
+            return false
         }
-
-        InstallEventHandler(
-            GetApplicationEventTarget(),
-            handler,
-            1,
-            &eventType,
-            nil,
-            &eventHandler
-        )
-
-        // Also register for hot key released
-        var releaseEventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
-
-        let releaseHandler: EventHandlerUPP = { (nextHandler, event, userData) -> OSStatus in
-            HotkeyManager.instance?.handleHotKeyReleased()
-            return noErr
+        if type == .keyDown {
+            let key = event.getIntegerValueField(.keyboardEventKeycode)
+            if canCancel(), key == 53 || (key == 8 && event.flags.contains(.maskControl)) {
+                reset(); onCancel(); return true
+            }
+            if shiftDown {
+                blocked = true
+                warmup?.cancel(); onWarmup(false)
+                // A Shift shortcut or text entry takes ownership, even after warmup.
+                if admitted && mode() == .hold { onCancel() }
+                admitted = false
+            }
+            return false
         }
-
-        var releaseEventHandler: EventHandlerRef?
-        InstallEventHandler(
-            GetApplicationEventTarget(),
-            releaseHandler,
-            1,
-            &releaseEventType,
-            nil,
-            &releaseEventHandler
-        )
-
-        // Register Ctrl+Space hotkey - overrides input source switching
-        // Space = kVK_Space = 49, controlKey = 4096
-        let hotKeyID = EventHotKeyID(signature: OSType(0x4D524D52), id: 1) // "MRMR"
-
-        let status = RegisterEventHotKey(
-            UInt32(kVK_Space),
-            UInt32(controlKey),
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if status == noErr {
-            print("[Murmur] ✅ Hotkey registered: Ctrl+Space")
+        if type == .leftMouseDown || type == .rightMouseDown {
+            if shiftDown && !admitted { blocked = true; warmup?.cancel(); onWarmup(false) }
+            return false
+        }
+        guard type == .flagsChanged else { return false }
+        let flags = event.flags
+        let down = flags.contains(.maskShift)
+        let otherModifier = !flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskSecondaryFn]).isEmpty
+        if otherModifier {
+            blocked = true; warmup?.cancel(); onWarmup(false)
+            if admitted && mode() == .hold { onCancel(); admitted = false }
+        }
+        guard down != shiftDown else { return false }
+        shiftDown = down
+        if down {
+            guard enabled(), !otherModifier else { blocked = true; return false }
+            blocked = false
+            pressedAt = Date()
+            if mode() == .hold {
+                guard !isActive() else { blocked = true; return false }
+                warmup = Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(160))
+                    guard !Task.isCancelled, let self, self.shiftDown, !self.blocked, self.enabled() else { return }
+                    self.onWarmup(true)
+                    try? await Task.sleep(for: .milliseconds(240))
+                    guard !Task.isCancelled, self.shiftDown, !self.blocked, self.enabled() else { return }
+                    self.admitted = true
+                    self.onWarmup(false)
+                    self.onStart()
+                }
+            }
         } else {
-            print("[Murmur] ❌ Failed to register hotkey: \(status)")
+            warmup?.cancel(); warmup = nil
+            onWarmup(false)
+            let wasAdmitted = admitted
+            admitted = false
+            if mode() == .hold {
+                if wasAdmitted { onFinish() }
+            } else if enabled(), !blocked, Date().timeIntervalSince(pressedAt) < 0.5, Date().timeIntervalSince(lastTap) >= 0.12 {
+                lastTap = Date()
+                if isActive() { onFinish() } else { onStart() }
+            }
+            blocked = false
         }
+        return false
     }
-
-    private func handleHotKeyPressed() {
-        guard UserDefaults.standard.bool(forKey: "hotkeyEnabled") else { return }
-        guard !isPressed else { return }
-
-        isPressed = true
-        DispatchQueue.main.async {
-            self.onKeyDown()
-        }
+    func reset() {
+        warmup?.cancel(); warmup = nil
+        shiftDown = false; admitted = false; blocked = false
+        onWarmup(false)
     }
-
-    private func handleHotKeyReleased() {
-        guard isPressed else { return }
-
-        isPressed = false
-        DispatchQueue.main.async {
-            self.onKeyUp()
-        }
-    }
-
     func stopListening() {
-        if let hotKey = hotKeyRef {
-            UnregisterEventHotKey(hotKey)
-            hotKeyRef = nil
-        }
-        isPressed = false
-    }
-
-    deinit {
-        stopListening()
-        HotkeyManager.instance = nil
+        let interrupted = tap != nil && isActive()
+        reset()
+        if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
+        if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+        tap = nil; source = nil
+        if interrupted { onCancel() }
     }
 }

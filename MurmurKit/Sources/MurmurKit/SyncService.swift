@@ -240,7 +240,7 @@ private final class SyncImpl: Sendable {
             connection.receive(minimumIncompleteLength: Int(length), maximumLength: Int(length)) { [weak self] payload, _, isComplete, _ in
                 if let payload,
                    let transcription = try? JSONDecoder().decode(Transcription.self, from: payload) {
-                    log.info("[Sync] received transcription: \(transcription.text.prefix(50))")
+                    log.info("[Sync] received transcription (\(payload.count) bytes)")
                     self?.onReceive(transcription)
                 } else {
                     log.error("[Sync] failed to decode payload (\(payload?.count ?? 0) bytes)")

@@ -3,196 +3,83 @@ import MurmurKit
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
-    @EnvironmentObject var syncService: SyncService
-    @State private var copiedItemId: UUID?
-    @State private var showingPeers = false
+    @ObservedObject var store: MurmurStore
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerSection
-
-            Divider()
-
-            Group {
-                if appState.isRecording || appState.isTranscribing {
-                    RecordingView()
-                } else {
-                    transcriptionList
-                }
-            }
-            .animation(MurmurTokens.Anim.stateTransition, value: appState.recordingState)
-
-            Divider()
-
-            footerSection
-        }
-        .frame(width: 340, height: 420)
-        .background(.regularMaterial)
-    }
-
-    // MARK: - Copy
-
-    private func copyText(_ text: String, itemId: UUID) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        copiedItemId = itemId
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            if copiedItemId == itemId {
-                copiedItemId = nil
-            }
-        }
-    }
-
-    // MARK: - Header
-
-    private var headerSection: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: MurmurTokens.Symbol.appIcon)
-                    .font(.title3)
-                    .foregroundStyle(MurmurTokens.accent)
-
-                Text("Murmur")
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Label("Murmur", systemImage: "waveform")
                     .font(.headline)
+                Spacer()
+                Circle().fill(appState.voiceEnabled ? Color.green : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                Text(appState.voiceEnabled ? "Ready" : "Set up")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-
-            Spacer()
-
-            syncIndicator
-
-            if appState.recordingState == .idle {
-                MurmurRecordButton(state: .idle, style: .capsule) {
-                    NotificationCenter.default.post(name: .startRecording, object: nil)
+            if appState.isActive {
+                Text(appState.isRecording ? "Listening to your next thought." : "Finishing your thought…")
+                    .font(.title3.weight(.medium))
+                if !appState.interimTranscript.isEmpty {
+                    Text(appState.interimTranscript).lineLimit(3).foregroundStyle(.secondary)
                 }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Sync Indicator
-
-    private var syncIndicator: some View {
-        Button {
-            showingPeers.toggle()
-        } label: {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .imageScale(.small)
-                .foregroundStyle(syncService.isConnected ? Color.green : Color.secondary)
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showingPeers) {
-            peerList
-        }
-    }
-
-    private var peerList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if syncService.connectedPeers.isEmpty {
-                Label("No peers connected", systemImage: "antenna.radiowaves.left.and.right.slash")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(syncService.connectedPeers, id: \.self) { peer in
-                    Label(peer, systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                HStack {
+                    Button("Cancel", role: .cancel) { post(.cancelRecording) }
+                    Spacer()
+                    if appState.isRecording { Button("Finish") { post(.stopRecording) }.buttonStyle(.borderedProminent) }
                 }
-            }
-        }
-        .font(.subheadline)
-        .padding()
-    }
-
-    // MARK: - Transcription List
-
-    private var transcriptionList: some View {
-        Group {
-            if appState.store.transcriptions.isEmpty {
-                MurmurEmptyStateView()
-            } else {
-                List {
-                    ForEach(appState.store.transcriptions) { entry in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.text)
-                                .font(.body)
-                                .lineLimit(3)
-
-                            HStack(spacing: 4) {
-                                if copiedItemId == entry.id {
-                                    Image(systemName: "checkmark")
-                                    Text("Copied")
-                                } else {
-                                    Text(entry.timestamp, style: .relative)
-                                    Text("\u{00B7}")
-                                    Text(entry.device)
-                                }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(copiedItemId == entry.id ? MurmurTokens.accent : Color.secondary.opacity(0.6))
-                            .animation(.easeInOut(duration: 0.2), value: copiedItemId)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            copyText(entry.text, itemId: entry.id)
-                        }
-                        .contextMenu {
-                            Button {
-                                copyText(entry.text, itemId: entry.id)
-                            } label: {
-                                Label("Copy", systemImage: MurmurTokens.Symbol.copy)
-                            }
-                            Divider()
-                            Button(role: .destructive) {
-                                appState.store.delete(id: entry.id)
-                            } label: {
-                                Label("Delete", systemImage: MurmurTokens.Symbol.delete)
-                            }
-                        }
+            } else if appState.voiceEnabled {
+                HStack(spacing: 10) {
+                    ShortcutBadge()
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(appState.mode == .hold ? "Hold Shift. Speak freely." : "Tap Shift. Speak freely.").font(.callout.weight(.medium))
+                        Text("Your words appear where you work.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                Button { post(.startRecording) } label: {
+                    Label("Start dictation", systemImage: "mic.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+            } else {
+                Text("Less typing.\nMore thinking.")
+                    .font(.system(size: 28, weight: .medium, design: .rounded)).tracking(-0.6)
+                Text("Connect your speech account, then hold Shift to turn a thought into text.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Button("Set up Murmur") { post(.openSettings) }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
             }
+            if let error = appState.lastError {
+                Label(error, systemImage: "exclamationmark.circle")
+                    .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Divider()
+            if let latest = store.transcriptions.first {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("LAST THOUGHT").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundStyle(.secondary)
+                    Text(latest.text).font(.callout).lineLimit(3).textSelection(.enabled)
+                    HStack {
+                        Text(latest.timestamp, style: .relative).font(.caption2).foregroundStyle(.tertiary)
+                        Spacer()
+                        Button("Copy", systemImage: "doc.on.doc") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(latest.text, forType: .string)
+                        }.buttonStyle(.borderless).font(.caption)
+                    }
+                }
+                Divider()
+            }
+            HStack {
+                Button("Library", systemImage: "text.book.closed") { post(.openLibrary) }
+                Spacer()
+                Button { post(.openSettings) } label: { Image(systemName: "gearshape") }
+                    .help("Settings").accessibilityLabel("Settings")
+                Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
+                    .help("Quit Murmur").accessibilityLabel("Quit Murmur")
+            }
+            .buttonStyle(.borderless).foregroundStyle(.secondary)
         }
+        .padding(22)
+        .frame(width: 354)
+        .background(.regularMaterial)
     }
-
-    // MARK: - Footer
-
-    private var footerSection: some View {
-        HStack {
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                Image(systemName: "power")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Quit Murmur")
-
-            Spacer()
-
-            Text("Control-Space to record")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-
-            Spacer()
-
-            Button {
-                NotificationCenter.default.post(name: .openSettings, object: nil)
-            } label: {
-                Image(systemName: MurmurTokens.Symbol.settings)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Settings")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-}
-
-#Preview {
-    MenuBarView()
-        .environmentObject(AppState())
-        .environmentObject(SyncService(deviceName: "Preview"))
+    private func post(_ notification: Notification.Name) { NotificationCenter.default.post(name: notification, object: nil) }
 }

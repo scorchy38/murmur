@@ -1,42 +1,71 @@
 import SwiftUI
-import Combine
+import AVFoundation
+import ApplicationServices
+import os
 import MurmurKit
 
 @MainActor
-class AppState: ObservableObject {
+final class AppState: ObservableObject {
     @Published var recordingState: RecordButtonState = .idle
     @Published var recordingStartDate: Date?
-    @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 50)
+    @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 16)
+    @Published var interimTranscript = ""
+    @Published var warmingUp = false
     @Published var lastError: String?
-
-    // Shared store for persistent + synced transcription history
+    @Published var notice: String?
+    @Published var completedText = ""
+    @Published var hasCredential = VoiceCredential.read() != nil
+    @Published var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    @Published var accessibilityGranted = AXIsProcessTrusted()
+    @Published var voiceEnabled: Bool
+    @Published var connectionReady = false
+    @Published var isRecoveredText = false
+    @Published var currentAttemptCount = 0
+    @Published var lastDuration: TimeInterval = 0
+    @Published var lastAudioBytes = 0
+    @Published var lastUsageTokens: Int?
+    @Published var attempts: [VoiceAttemptSummary] = []
     let store = MurmurStore()
 
-    // Settings
-    @AppStorage("groqApiKey") var groqApiKey: String = ""
-    @AppStorage("hotkeyEnabled") var hotkeyEnabled: Bool = true
-    @AppStorage("soundsEnabled") var soundsEnabled: Bool = true
-    @AppStorage("autoInsertText") var autoInsertText: Bool = true
-    @AppStorage("removeFillerWords") var removeFillerWords: Bool = true
+    @AppStorage("voiceMode") var voiceMode: String = "hold"
+    @AppStorage("voiceLanguage") var language: String = "en"
+    @AppStorage("voiceVocabulary") var vocabulary: String = ""
+    @AppStorage("soundsEnabled") var soundsEnabled = true
+    @AppStorage("autoInsertText") var autoInsertText = true
+    @AppStorage("saveHistory") var saveHistory = true
+    @AppStorage("syncEnabled") var syncEnabled = false
 
-    var isRecording: Bool {
-        recordingState == .recording
+    init() {
+        let defaults = UserDefaults.standard
+        let nested = defaults.dictionary(forKey: "voice")
+        voiceEnabled = VoiceSettings.enabled(nested: nested, legacy: defaults.object(forKey: "voiceEnabled"))
     }
-
-    var isTranscribing: Bool {
-        recordingState == .transcribing
+    var mode: VoiceMode { VoiceMode(rawValue: voiceMode) ?? .hold }
+    var isRecording: Bool { recordingState == .recording }
+    var isTranscribing: Bool { recordingState == .transcribing }
+    var isActive: Bool { recordingState != .idle }
+    var configuredVocabulary: [String] {
+        VoiceVocabulary.sanitized(VoiceVocabulary.coding + vocabulary.components(separatedBy: .newlines))
     }
-
-    func addTranscription(_ text: String) {
-        store.add(text, device: "Mac")
+    func setEnabled(_ enabled: Bool) {
+        var nested = UserDefaults.standard.dictionary(forKey: "voice") ?? [:]
+        nested["enabled"] = enabled
+        UserDefaults.standard.set(nested, forKey: "voice")
+        UserDefaults.standard.set(enabled, forKey: "voiceEnabled")
+        voiceEnabled = enabled
+        Logger(subsystem: "com.murmur", category: "Voice").info("enablement_changed enabled=\(enabled)")
     }
-
-    func updateAudioLevels(_ level: CGFloat) {
+    func refreshPermissions() {
+        let credential = VoiceCredential.read() != nil
+        let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let accessibility = AXIsProcessTrusted()
+        if hasCredential != credential { hasCredential = credential }
+        if microphoneGranted != microphone { microphoneGranted = microphone }
+        if accessibilityGranted != accessibility { accessibilityGranted = accessibility }
+    }
+    func updateAudioLevels(_ level: Double) {
         audioLevels.removeFirst()
-        audioLevels.append(level)
+        audioLevels.append(CGFloat(level))
     }
-
-    func clearHistory() {
-        store.clear()
-    }
+    func clearHistory() { store.clear() }
 }

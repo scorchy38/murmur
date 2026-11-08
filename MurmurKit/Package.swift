@@ -13,5 +13,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "MurmurKit"),
+        .testTarget(name: "MurmurKitTests", dependencies: ["MurmurKit"]),
     ]
 )

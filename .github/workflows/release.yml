@@ -19,13 +19,6 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Inject API key
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          sed -i '' "s|private static let embeddedKey = \"\"|private static let embeddedKey = \"${GROQ_API_KEY}\"|" \
-            MurmurKit/Sources/MurmurKit/TranscriptionService.swift
-
       - name: Create placeholder Secrets.plist
         run: |
           cat > MurmurMobile/iOS/Secrets.plist << 'PLIST'
@@ -44,6 +37,17 @@ jobs:
       - name: Generate macOS project
         run: xcodegen generate
 
+      - name: Test voice contract
+        run: swift test --package-path MurmurKit
+
+      - name: Test native voice lifecycle and gestures
+        run: |
+          xcodebuild test \
+            -scheme Murmur \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            DEVELOPMENT_TEAM=""
+
       - name: Archive macOS app
         run: |
           xcodebuild archive \
@@ -59,6 +63,20 @@ jobs:
           cd build && zip -r Murmur-Mac.zip Murmur.app
 
       # ── iOS ────────────────────────────────────────────────
+
+      # The mobile clients still use the legacy upload path. Keep its credential
+      # injection after Mac packaging: native Mac releases contain no API keys.
+      - name: Inject legacy mobile API key
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          source = pathlib.Path("MurmurKit/Sources/MurmurKit/TranscriptionService.swift")
+          code = source.read_text()
+          key = json.dumps(os.environ.get("GROQ_API_KEY", ""))
+          source.write_text(code.replace('private static let embeddedKey = ""', 'private static let embeddedKey = ' + key))
+          PY
 
       - name: Generate iOS project
         run: cd MurmurMobile && xcodegen generate

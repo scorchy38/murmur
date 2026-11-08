@@ -1,17 +1,19 @@
 # Murmur
 
-Voice-to-text transcription app for Apple platforms. Record speech on any device and get instant transcriptions synced across Mac, iPhone, and Apple Watch over the local network.
+Native dictation for Mac: hold Shift, speak, and watch your words take shape in a centered live preview. Release to finish; Murmur inserts into an unchanged original text field or keeps your result ready to review and copy. The repository also includes the existing iPhone, Apple Watch, and keyboard clients.
 
 ## Features
 
-- **macOS**: Menu bar app with global hotkey (Ctrl+Space) for push-to-talk dictation. Transcriptions auto-copy to clipboard and paste at cursor.
+- **macOS 2.0**: Guarded hold-Shift or tap-Shift dictation, live Smart transcription, native Liquid Glass on macOS 26, editable result review, searchable history, Keychain credentials, safe text insertion, cancellation and streaming recovery.
 - **iOS**: Standalone app with record button and transcription history. Includes a custom keyboard extension for system-wide voice input.
 - **watchOS**: Record from your wrist with a simple tap. View transcription history on a separate screen.
 - **Cross-device sync**: All devices discover each other via Bonjour and exchange transcriptions in real time over the local network. No cloud account required.
 
 ## How It Works
 
-Audio is recorded locally, sent to the Groq Whisper API for transcription, then the text is stored and broadcast to all connected Murmur devices on the same network. Each device acts as both a host and a client in a peer-to-peer mesh.
+On Mac, microphone audio streams as mono 16 kHz PCM to the native speech adapter using Gemini Smart transcription and manual utterance boundaries. Interim text is replaced in place; late final corrections arrive before commitment. Audio remains in memory and is cleared by the recording lifecycle. Completed text can be saved locally and optionally synced over a trusted local network. Dictation never automatically submits a message.
+
+The existing mobile clients retain the legacy Groq upload path. See [native architecture, specification mapping, and validation](docs/voice-implementation.md) and [the supplied specification](docs/voice-spec.md).
 
 ## Project Structure
 
@@ -27,10 +29,11 @@ Murmur/
 
 ## Requirements
 
-- Xcode 16+
+- Xcode 26+ (for native Liquid Glass APIs)
 - macOS 14+, iOS 18+, watchOS 11+
-- Groq API key (set via macOS Settings → API, or `Secrets.plist`; CI injects from `GROQ_API_KEY` secret)
-- All devices on the same local network for sync
+- Mac: Gemini API key, saved in Settings → Connection to this Mac’s Keychain. Mac releases contain no embedded API keys.
+- Legacy mobile: Groq API key via `Secrets.plist` or the mobile CI secret
+- A trusted local network if you opt into transcription sync
 
 ## Building
 
@@ -38,7 +41,7 @@ Uses [XcodeGen](https://github.com/yonaskolb/XcodeGen) for project generation.
 
 ```
 # macOS
-cd Murmur && xcodegen generate
+xcodegen generate
 xcodebuild -scheme Murmur -destination 'platform=macOS' build
 
 # iOS + watchOS
@@ -56,7 +59,12 @@ Download the latest build from [Releases](../../releases).
 1. Unzip **Murmur-Mac.zip**
 2. Drag **Murmur.app** to your Applications folder
 3. First launch: right-click the app → **Open** (bypasses Gatekeeper)
-4. Murmur appears in your menu bar — hold **Control-Space** to dictate
+4. Open Murmur’s menu bar → **Set up Murmur** → **Connection**, save your Gemini API key, and enable dictation
+5. Allow Microphone access; grant Accessibility in **Settings → Dictation** for the Shift gesture and text insertion
+6. Hold **Shift** alone for a moment, speak, then release to finish. Press **Escape** to cancel
+7. Review or copy the result if your original field changed or does not support safe insertion
+
+The Mac minimum remains macOS 14, with native Liquid Glass on macOS 26 and a material fallback on earlier supported versions. A different ad-hoc build can require macOS privacy permissions to be granted again.
 
 ### iPhone
 

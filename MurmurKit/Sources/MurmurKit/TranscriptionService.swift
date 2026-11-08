@@ -7,7 +7,7 @@ public enum TranscriptionError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .noAPIKey: return "No API key configured"
+        case .noAPIKey: return "No Groq API key configured. Add one in Murmur Settings → API."
         case .invalidResponse: return "Invalid response"
         case .apiError(let msg): return msg
         }
@@ -84,6 +84,9 @@ public actor TranscriptionService {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            if (response as? HTTPURLResponse)?.statusCode == 401 {
+                throw TranscriptionError.apiError("Groq rejected the API key. Update it in Murmur Settings → API. A saved key overrides the bundled release key; clear it to use the bundled key.")
+            }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let error = json["error"] as? [String: Any],
                let message = error["message"] as? String {
