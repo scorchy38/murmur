@@ -98,4 +98,54 @@ final class VoiceGestureTests: XCTestCase {
         manager.reset()
     }
 
+    func testControlOptionStartsImmediatelyAndReleasesOnce() {
+        let manager = HotkeyManager(); manager.enabled = { true }; manager.shortcut = { .controlOption }
+        var starts = 0; var finishes = 0
+        manager.onStart = { starts += 1 }; manager.onFinish = { finishes += 1 }
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: .maskControl))
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
+        XCTAssertEqual(starts, 1)
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: .maskControl))
+        XCTAssertEqual(starts, 1); XCTAssertEqual(finishes, 1)
+        manager.reset()
+    }
+    func testControlSpaceConsumesOnlyItsOwnKeysAndIgnoresRepeats() {
+        let manager = HotkeyManager(); manager.enabled = { true }; manager.shortcut = { .controlSpace }
+        var starts = 0; var finishes = 0
+        manager.onStart = { starts += 1 }; manager.onFinish = { finishes += 1 }
+        XCTAssertFalse(manager.handle(.keyDown, event: event(.keyDown, key: 0, flags: .maskControl)))
+        XCTAssertTrue(manager.handle(.keyDown, event: event(.keyDown, key: 49, flags: .maskControl)))
+        let repeated = event(.keyDown, key: 49, flags: .maskControl)
+        repeated.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+        XCTAssertTrue(manager.handle(.keyDown, event: repeated))
+        XCTAssertTrue(manager.handle(.keyUp, event: event(.keyUp, key: 49, flags: .maskControl)))
+        XCTAssertEqual(starts, 1); XCTAssertEqual(finishes, 1)
+        manager.reset()
+    }
+    func testAlternateShortcutRespectsGateAndOtherKeysCancel() {
+        let manager = HotkeyManager(); manager.shortcut = { .controlOption }
+        var starts = 0; var cancels = 0
+        manager.onStart = { starts += 1 }; manager.onCancel = { cancels += 1 }
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
+        XCTAssertEqual(starts, 0)
+        manager.enabled = { true }
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
+        _ = manager.handle(.keyDown, event: event(.keyDown, key: 0, flags: [.maskControl, .maskAlternate]))
+        XCTAssertEqual(starts, 1); XCTAssertEqual(cancels, 1)
+        manager.reset()
+    }
+
+    func testExtraModifierCancelsAlternateHoldWithoutRestartingOrCommitting() {
+        let manager = HotkeyManager(); manager.enabled = { true }; manager.shortcut = { .controlOption }
+        var starts = 0; var finishes = 0; var cancels = 0
+        manager.onStart = { starts += 1 }; manager.onFinish = { finishes += 1 }; manager.onCancel = { cancels += 1 }
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate, .maskCommand]))
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged))
+        XCTAssertEqual(starts, 1); XCTAssertEqual(cancels, 1); XCTAssertEqual(finishes, 0)
+        manager.reset()
+    }
+
 }

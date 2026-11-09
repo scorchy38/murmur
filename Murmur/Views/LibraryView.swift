@@ -98,7 +98,7 @@ struct LibraryView: View {
                     Image(systemName: "waveform").font(.system(size: 46, weight: .ultraLight)).foregroundStyle(Color.accentColor)
                     Text("Your prompts,\nready to use.")
                         .font(.system(size: 36, weight: .medium, design: .rounded)).tracking(-1.8).multilineTextAlignment(.center)
-                    Text(store.transcriptions.isEmpty ? "Hold Shift to speak. We’ll take care of the words." : "Choose a prompt to read, edit, or share.")
+                    Text(store.transcriptions.isEmpty ? "\(appState.shortcutInstruction) to speak. We’ll take care of the words." : "Choose a prompt to read, edit, or share.")
                         .foregroundStyle(.secondary).multilineTextAlignment(.center)
                     HStack(spacing: 10) { ShortcutBadge(); Text("Hold to speak").font(.callout).foregroundStyle(.secondary) }
                         .padding(12).voiceGlass(cornerRadius: 16)

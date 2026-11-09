@@ -33,6 +33,26 @@ func showVoicePreview(_ scenario: String, state: AppState) -> NSWindow {
         ]
         root = AnyView(LibraryView(store: state.store).environmentObject(state))
         size = scenario == "library-small" ? NSSize(width: 900, height: 580) : NSSize(width: 1080, height: 720)
+    } else if scenario == "setup" {
+        state.recordingState = .idle
+        state.hasCredential = true; state.microphoneGranted = true
+        state.practiceText = "Murmur is ready for my next idea."
+        state.practiceMessage = "Recognized and copied. Now try it in another app."
+        state.practiceHeardSignal = true
+        root = AnyView(Form { SetupView() }.formStyle(.grouped).environmentObject(state))
+        size = NSSize(width: 540, height: 680)
+    } else if scenario == "shadow-indicator" {
+        root = AnyView(ShadowStatusView().environmentObject(state))
+        size = NSSize(width: 280, height: 85)
+    } else if scenario == "recovery" {
+        state.recordingState = .idle
+        state.store.transcriptions = []
+        state.shortcutListening = true
+        state.completedText = sample
+        state.deliveryMessage = "Your field or cursor changed. Copied instead; try again or review the result."
+        state.deliveryCanRetry = true; state.deliveryCanUndo = true
+        root = AnyView(MenuBarView(store: state.store).environmentObject(state))
+        size = NSSize(width: 354, height: 600)
     } else if scenario == "usage" {
         for offset in 0..<7 {
             var attempt = VoiceAttemptSummary()

@@ -36,3 +36,8 @@ dist/
 .env
 *.key
 Secrets.plist
+
+# Python tooling
+__pycache__/
+*.py[cod]
+docs/

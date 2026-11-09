@@ -15,9 +15,12 @@
 		35CDF1321C948962CFAEB964 /* VoiceControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71A2C0BB10E25870F5FD7FB /* VoiceControllerTests.swift */; };
 		469D73F8430F2E6A7CA18DEC /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56A6EBFC85FCFA930C7A68B /* AppUpdater.swift */; };
 		58A5D8C5CFF25765077E21A9 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC23D39BB29EF4CEDD30E03C /* HotkeyManager.swift */; };
+		6A8C8B194F33E72E73FC69DE /* DeliveryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6292890A53708CE11DA9C3 /* DeliveryController.swift */; };
 		6DA49FB9CCA842FA4B2688C0 /* MurmurApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED35761EBF7EF881FA0E7BB9 /* MurmurApp.swift */; };
 		6F8A4C24F1EA51719641F3CA /* MurmurKit in Frameworks */ = {isa = PBXBuildFile; productRef = E0D0F5810DF3D4BF37594330 /* MurmurKit */; };
 		796BC8C0FC65B20CA8DA78D1 /* TextInserter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBEA9058AB4AB8F2D550D04 /* TextInserter.swift */; };
+		7A66F42270E6596D979D2646 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CEA4F696FCDE74B8E1D62BF /* SetupView.swift */; };
+		83FC4B3CC6C0FF1F5AD38B29 /* VoiceDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459E3632B000ED22C68BE825 /* VoiceDiagnosticsTests.swift */; };
 		875EDB44E3C298A6740E36E1 /* UpdateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA97DB724FFAF06909BA9FC /* UpdateSettingsView.swift */; };
 		92E4016D915EA080EA0823A4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = DECF0E8FB2D2058742D4EF03 /* Sparkle */; };
 		9B44E20E73B1EE92F61F1CA1 /* VoiceAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66DAB6EC735DF4C0BD2DCE4A /* VoiceAudioTests.swift */; };
@@ -26,14 +29,17 @@
 		B2151479B60BAF2CDC1538A8 /* OverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6970843BC72FAB69835D24 /* OverlayController.swift */; };
 		B3A4BCD226A7B82FCA96F964 /* VoiceGestureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4E74D37B8F7542EC1EA5B9 /* VoiceGestureTests.swift */; };
 		B4D8103FCCABC838148E820D /* VoicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6148183B2E20F406F12862BD /* VoicePreview.swift */; };
+		B8EFA1EA0CD6CCEDA84F3D37 /* DeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193806A2DF1DAC99AC1137BB /* DeliveryTests.swift */; };
 		CCA6160297EC5A1677B8106D /* MurmurKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7E5A870AA24834D2C5AF68DA /* MurmurKit */; };
 		D9F0A9B9B79DD62B57B8C356 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A927CC6C8A6AF138E317A4A /* UsageStore.swift */; };
 		DEFF573F9E683FAFA2AABDC5 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7154915D7172F8ABCCE9E06 /* AppState.swift */; };
 		E18A17C76645051940912D86 /* UsageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F275A191E2AB9027E457FE4 /* UsageStoreTests.swift */; };
 		E3224DAF7DCD65D9C362A023 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CAC8BA3E17B715F2C60228 /* AudioRecorder.swift */; };
+		E41EDB5C4F992375C4C48401 /* SetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43D468CD97F2056453A6F2E5 /* SetupTests.swift */; };
 		EA9E5FA908E62066269556A8 /* AppUpdaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 222842F55366013AAB46AAB2 /* AppUpdaterTests.swift */; };
 		F749E8DCCC47751933645208 /* VoiceDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162309A9DA0DF8AE9F829BB6 /* VoiceDesign.swift */; };
 		FBA80D1F4BCB7C1E156628AE /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9956F6FDABD559B1B729C6B3 /* VoiceController.swift */; };
+		FE7E3548F362EA25B18AEA2B /* VoiceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD673DB82DF7B09BD74BB05 /* VoiceDiagnostics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,21 +57,27 @@
 		0CBEA9058AB4AB8F2D550D04 /* TextInserter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInserter.swift; sourceTree = "<group>"; };
 		0DC82B5DCE3D7045884CF6CA /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
 		162309A9DA0DF8AE9F829BB6 /* VoiceDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDesign.swift; sourceTree = "<group>"; };
+		193806A2DF1DAC99AC1137BB /* DeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryTests.swift; sourceTree = "<group>"; };
 		1EC05706BDDF617F2CBF12AD /* MurmurTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MurmurTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		222842F55366013AAB46AAB2 /* AppUpdaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdaterTests.swift; sourceTree = "<group>"; };
 		2817413F3EED5052DF0C4BCE /* MurmurKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MurmurKit; path = MurmurKit; sourceTree = SOURCE_ROOT; };
 		3F6970843BC72FAB69835D24 /* OverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayController.swift; sourceTree = "<group>"; };
+		43D468CD97F2056453A6F2E5 /* SetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupTests.swift; sourceTree = "<group>"; };
+		459E3632B000ED22C68BE825 /* VoiceDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDiagnosticsTests.swift; sourceTree = "<group>"; };
 		46249B3E4CE4AB77BD151E18 /* UsageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSettingsView.swift; sourceTree = "<group>"; };
 		6148183B2E20F406F12862BD /* VoicePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreview.swift; sourceTree = "<group>"; };
 		639B69EEA827CC537808441D /* ShadowModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShadowModeTests.swift; sourceTree = "<group>"; };
 		66DAB6EC735DF4C0BD2DCE4A /* VoiceAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAudioTests.swift; sourceTree = "<group>"; };
+		6C6292890A53708CE11DA9C3 /* DeliveryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryController.swift; sourceTree = "<group>"; };
 		705220A3846AC6270FEBBC24 /* Murmur.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Murmur.entitlements; sourceTree = "<group>"; };
 		7A927CC6C8A6AF138E317A4A /* UsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStore.swift; sourceTree = "<group>"; };
+		7CEA4F696FCDE74B8E1D62BF /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		8DA97DB724FFAF06909BA9FC /* UpdateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSettingsView.swift; sourceTree = "<group>"; };
 		9956F6FDABD559B1B729C6B3 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		9BF889621049D4E0393F1E2F /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		9F275A191E2AB9027E457FE4 /* UsageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStoreTests.swift; sourceTree = "<group>"; };
 		AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AFD673DB82DF7B09BD74BB05 /* VoiceDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDiagnostics.swift; sourceTree = "<group>"; };
 		BA0E563F85E519D1E62A21CB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C56A6EBFC85FCFA930C7A68B /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		C834EC374C4A986C47F46292 /* Murmur.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Murmur.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -156,6 +168,7 @@
 				9BF889621049D4E0393F1E2F /* MenuBarView.swift */,
 				0DC82B5DCE3D7045884CF6CA /* RecordingView.swift */,
 				AB4C7648F3BAAFBD960B5BCA /* SettingsView.swift */,
+				7CEA4F696FCDE74B8E1D62BF /* SetupView.swift */,
 				8DA97DB724FFAF06909BA9FC /* UpdateSettingsView.swift */,
 				46249B3E4CE4AB77BD151E18 /* UsageSettingsView.swift */,
 				162309A9DA0DF8AE9F829BB6 /* VoiceDesign.swift */,
@@ -177,10 +190,12 @@
 			children = (
 				C56A6EBFC85FCFA930C7A68B /* AppUpdater.swift */,
 				F6CAC8BA3E17B715F2C60228 /* AudioRecorder.swift */,
+				6C6292890A53708CE11DA9C3 /* DeliveryController.swift */,
 				DC23D39BB29EF4CEDD30E03C /* HotkeyManager.swift */,
 				3F6970843BC72FAB69835D24 /* OverlayController.swift */,
 				0CBEA9058AB4AB8F2D550D04 /* TextInserter.swift */,
 				9956F6FDABD559B1B729C6B3 /* VoiceController.swift */,
+				AFD673DB82DF7B09BD74BB05 /* VoiceDiagnostics.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -204,10 +219,13 @@
 			isa = PBXGroup;
 			children = (
 				222842F55366013AAB46AAB2 /* AppUpdaterTests.swift */,
+				193806A2DF1DAC99AC1137BB /* DeliveryTests.swift */,
+				43D468CD97F2056453A6F2E5 /* SetupTests.swift */,
 				639B69EEA827CC537808441D /* ShadowModeTests.swift */,
 				9F275A191E2AB9027E457FE4 /* UsageStoreTests.swift */,
 				66DAB6EC735DF4C0BD2DCE4A /* VoiceAudioTests.swift */,
 				D71A2C0BB10E25870F5FD7FB /* VoiceControllerTests.swift */,
+				459E3632B000ED22C68BE825 /* VoiceDiagnosticsTests.swift */,
 				DB4E74D37B8F7542EC1EA5B9 /* VoiceGestureTests.swift */,
 			);
 			path = MurmurTests;
@@ -328,6 +346,7 @@
 				DEFF573F9E683FAFA2AABDC5 /* AppState.swift in Sources */,
 				469D73F8430F2E6A7CA18DEC /* AppUpdater.swift in Sources */,
 				E3224DAF7DCD65D9C362A023 /* AudioRecorder.swift in Sources */,
+				6A8C8B194F33E72E73FC69DE /* DeliveryController.swift in Sources */,
 				58A5D8C5CFF25765077E21A9 /* HotkeyManager.swift in Sources */,
 				1F12DDB04A231CD7CD75D0C1 /* LibraryView.swift in Sources */,
 				AC3AACF289779EE0414AE4F2 /* MenuBarView.swift in Sources */,
@@ -335,12 +354,14 @@
 				B2151479B60BAF2CDC1538A8 /* OverlayController.swift in Sources */,
 				00392263BF1F13D599791D5A /* RecordingView.swift in Sources */,
 				1950BDF0067EFE703A46E74C /* SettingsView.swift in Sources */,
+				7A66F42270E6596D979D2646 /* SetupView.swift in Sources */,
 				796BC8C0FC65B20CA8DA78D1 /* TextInserter.swift in Sources */,
 				875EDB44E3C298A6740E36E1 /* UpdateSettingsView.swift in Sources */,
 				1B0673F74E49EF86FB71E15D /* UsageSettingsView.swift in Sources */,
 				D9F0A9B9B79DD62B57B8C356 /* UsageStore.swift in Sources */,
 				FBA80D1F4BCB7C1E156628AE /* VoiceController.swift in Sources */,
 				F749E8DCCC47751933645208 /* VoiceDesign.swift in Sources */,
+				FE7E3548F362EA25B18AEA2B /* VoiceDiagnostics.swift in Sources */,
 				B4D8103FCCABC838148E820D /* VoicePreview.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -350,10 +371,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				EA9E5FA908E62066269556A8 /* AppUpdaterTests.swift in Sources */,
+				B8EFA1EA0CD6CCEDA84F3D37 /* DeliveryTests.swift in Sources */,
+				E41EDB5C4F992375C4C48401 /* SetupTests.swift in Sources */,
 				0737CC2A74A6709745F2BC1E /* ShadowModeTests.swift in Sources */,
 				E18A17C76645051940912D86 /* UsageStoreTests.swift in Sources */,
 				9B44E20E73B1EE92F61F1CA1 /* VoiceAudioTests.swift in Sources */,
 				35CDF1321C948962CFAEB964 /* VoiceControllerTests.swift in Sources */,
+				83FC4B3CC6C0FF1F5AD38B29 /* VoiceDiagnosticsTests.swift in Sources */,
 				B3A4BCD226A7B82FCA96F964 /* VoiceGestureTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -449,7 +473,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = ZHCT595PYJ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -464,7 +488,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 2.1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -527,7 +551,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = ZHCT595PYJ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -548,7 +572,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 2.1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

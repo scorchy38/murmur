@@ -37,17 +37,17 @@ struct MenuBarView: View {
             } else if appState.voiceEnabled {
                 if !appState.shortcutListening {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(appState.accessibilityGranted ? "The Shift shortcut couldn’t start. Check Murmur’s Accessibility access." : "Allow Accessibility access so Murmur can hear the Shift shortcut outside the app.")
+                        Text(appState.accessibilityGranted ? "The shortcut couldn’t start. Check Murmur’s Accessibility access." : "Allow Accessibility access so your shortcut works outside Murmur.")
                             .font(.callout).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Button("Allow Shift shortcut") { post(.openShortcutPermissions) }
+                        Button("Allow shortcut") { post(.openShortcutPermissions) }
                             .buttonStyle(.bordered)
                     }
                 }
                 HStack(spacing: 10) {
-                    ShortcutBadge()
+                    ShortcutBadge(title: appState.shortcut.symbol)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(appState.mode == .hold ? "Hold Shift. Speak freely." : "Tap Shift. Speak freely.").font(.callout.weight(.medium))
+                        Text(appState.shortcutInstruction + ". Speak freely.").font(.callout.weight(.medium))
                         Text(appState.shadowMode ? "Shadow Mode · Clipboard only" : "Your words appear where you work.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -60,7 +60,7 @@ struct MenuBarView: View {
                     .font(.system(size: 28, weight: .medium, design: .rounded)).tracking(-0.6)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Connect your speech account, then hold Shift to dictate a prompt.")
+                Text("Connect your speech account, then use your shortcut to dictate a prompt.")
                     .font(.callout).foregroundStyle(.secondary)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
@@ -71,6 +71,17 @@ struct MenuBarView: View {
                 Label(error, systemImage: "exclamationmark.circle")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if !appState.isActive && !appState.completedText.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !appState.deliveryMessage.isEmpty { Text(appState.deliveryMessage).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                    HStack {
+                        Button("Copy again") { post(.copyLastResult) }
+                        Button("Review") { post(.reviewLastResult) }
+                        if appState.deliveryCanUndo { Button("Undo") { post(.undoLastDelivery) }.help("Undo Murmur's unchanged insertion or restore its previous clipboard, within 60 seconds") }
+                    }.buttonStyle(.borderless).font(.caption)
+                    if appState.deliveryCanRetry { Button("Try original field again") { post(.retryLastInsertion) }.font(.caption) }
+                }
             }
             Divider()
             if let latest = store.transcriptions.first {

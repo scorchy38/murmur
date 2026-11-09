@@ -4,6 +4,13 @@ import MurmurKit
 import os
 
 extension Notification.Name {
+    static let copyLastResult = Notification.Name("copyLastResult")
+    static let retryLastInsertion = Notification.Name("retryLastInsertion")
+    static let undoLastDelivery = Notification.Name("undoLastDelivery")
+    static let reviewLastResult = Notification.Name("reviewLastResult")
+    static let selectSetupSettings = Notification.Name("selectSetupSettings")
+    static let selectConnectionSettings = Notification.Name("selectConnectionSettings")
+    static let startPractice = Notification.Name("startPractice")
     static let startRecording = Notification.Name("startRecording")
     static let stopRecording = Notification.Name("stopRecording")
     static let cancelRecording = Notification.Name("cancelRecording")
@@ -29,13 +36,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var libraryWindow: NSWindow?
+    private var reviewWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var observers: [NSObjectProtocol] = []
     private var permissionTimer: Timer?
-    private let inserter = TextInserter()
+    private let delivery = DeliveryController()
     private lazy var overlay = OverlayController(state: appState)
     private lazy var voice = VoiceController(state: appState)
     private let hotkey = HotkeyManager()
+    private var boundShortcut = VoiceShortcut.shift
+    private var boundMode = VoiceMode.hold
     private let sync = SyncService(deviceName: "Mac")
     private var syncing = false
     private let updater = AppUpdater.shared
@@ -53,11 +63,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater.isBusy = { [weak self] in self?.appState.isActive == true || self?.appState.warmingUp == true }
         updater.start()
         configureVoice()
+        observe(.copyLastResult) { delegate in
+            guard !delegate.appState.completedText.isEmpty else { return }
+            delegate.delivery.deliver(delegate.appState.completedText, insert: false)
+        }
+        observe(.retryLastInsertion) { delegate in
+            delegate.popover?.performClose(nil)
+            delegate.overlay.hide()
+            delegate.delivery.prepareOriginalField()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { delegate.delivery.retryOriginalField() }
+        }
+        observe(.undoLastDelivery) { delegate in
+            delegate.popover?.performClose(nil)
+            delegate.overlay.hide()
+            delegate.delivery.prepareOriginalField()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { delegate.delivery.undo() }
+        }
+        observe(.reviewLastResult) { $0.openReviewWindow() }
+        observe(.startPractice) { $0.startRecording(practice: true) }
         observe(.startRecording) { $0.startRecording() }
         observe(.stopRecording) { $0.voice.finish() }
         observe(.cancelRecording) { delegate in
             if delegate.appState.isActive { delegate.voice.cancel() }
-            else { delegate.overlay.hide(); delegate.inserter.clear() }
+            else { delegate.overlay.hide(); delegate.delivery.discardAnchor() }
         }
         observe(.openSettings) { $0.openSettingsWindow() }
         observe(.openLibrary) { $0.openLibraryWindow() }
@@ -107,55 +135,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureVoice() {
+        delivery.retainClipboardForUndo = { [weak self] in self?.appState.clipboardUndoEnabled ?? false }
+        delivery.onChange = { [weak self] in
+            guard let self else { return }
+            self.appState.deliveryOutcome = self.delivery.status.rawValue
+            self.appState.deliveryCanUndo = self.delivery.canUndo
+            self.appState.deliveryCanRetry = self.delivery.canRetry
+            self.appState.deliveryMessage = self.delivery.message
+            self.appState.notice = self.delivery.message
+        }
         voice.onUsageSnapshot = { [weak self] session in self?.appState.usageStore.record(session) }
         voice.onPresentation = { [weak self] in
             guard let self else { return }
             self.updateIcon()
+            let presentingPractice = self.appState.practiceSession
+            if self.appState.practiceSession && !self.appState.isActive && self.appState.completedText.isEmpty {
+                self.appState.practiceSession = false
+                self.appState.practiceMessage = self.appState.lastError ?? "No text was recognized. Try again."
+            }
             DispatchQueue.main.async { [weak self] in self?.updater.resumeWhenIdle() }
-            if self.appState.isActive || self.appState.lastError != nil || !self.appState.completedText.isEmpty {
+            if !presentingPractice && (self.appState.isActive || self.appState.lastError != nil || !self.appState.completedText.isEmpty) {
                 self.overlay.show()
                 if !self.appState.isActive, self.appState.completedText.isEmpty { self.overlay.dismiss(after: 10) }
             }
         }
         voice.onComplete = { [weak self] text, recovered in
             guard let self else { return }
+            if self.appState.practiceSession {
+                let status = self.delivery.deliver(text, insert: false)
+                self.appState.completePractice(text: text, recovered: recovered, copied: status == .copied)
+                self.overlay.hide()
+                return
+            }
             if self.appState.saveHistory {
                 self.appState.store.add(text, device: "Mac")
                 if self.appState.syncEnabled, let item = self.appState.store.transcriptions.first { self.sync.send(item) }
             }
-            // Clipboard is the explicit fallback, and remains available after review.
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            let result = self.delivery.deliver(text, insert: self.appState.autoInsertText && !self.appState.shadowMode && !recovered)
+            if result == .inserted { self.appState.setupExternalPassed = true }
             if self.appState.shadowMode {
-                self.appState.notice = "Copied to clipboard."
-                self.overlay.hide()
-                self.inserter.clear()
+                self.overlay.show()
+                self.overlay.dismiss(after: 2)
+                self.delivery.discardAnchor()
                 return
             }
-            if self.appState.autoInsertText && !recovered {
-                switch self.inserter.insert(text) {
-                case .inserted:
-                    Logger(subsystem: "com.murmur", category: "Voice").info("insertion_succeeded")
-                    self.appState.notice = "Inserted into your original text field."
-                    self.overlay.show()
-                    self.overlay.dismiss(after: 1.8)
-                case .changed:
-                    Logger(subsystem: "com.murmur", category: "Voice").info("insertion_skipped reason=divergence")
-                    self.appState.notice = "Your text or cursor changed. Review here; the result is also copied."
-                case .unavailable:
-                    Logger(subsystem: "com.murmur", category: "Voice").info("insertion_skipped reason=unavailable_anchor")
-                    self.appState.notice = "Ready to paste. The result is copied to your clipboard."
-                }
-            } else if !recovered { self.appState.notice = "Copied to your clipboard. Edit here or paste when you’re ready." }
-            self.inserter.clear()
+            self.overlay.show()
+            if result == .inserted { self.overlay.dismiss(after: 1.8) }
         }
-        voice.onCancel = { [weak self] in self?.inserter.clear(); self?.overlay.hide(); self?.updateIcon(); self?.updater.resumeWhenIdle() }
+        voice.onCancel = { [weak self] in
+            guard let self else { return }
+            if self.appState.practiceSession { self.appState.practiceMessage = "Practice cancelled. Try again when you're ready." }
+            self.appState.practiceSession = false
+            self.delivery.discardAnchor(); self.overlay.hide(); self.updateIcon(); self.updater.resumeWhenIdle()
+        }
+
         hotkey.enabled = { [weak self] in
             guard let self else { return false }
             // Native modal dialogs own their keys, including modifier gestures.
             return self.appState.voiceEnabled && NSApp.modalWindow == nil &&
-                (self.appState.mode != .tap || self.appState.isActive || TextInserter.tapEligible())
+                (self.appState.mode != .tap || self.appState.isActive || (self.appState.setupVisible && NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier) || TextInserter.tapEligible())
         }
+        hotkey.shortcut = { [weak self] in self?.appState.shortcut ?? .shift }
         hotkey.mode = { [weak self] in self?.appState.mode ?? .hold }
         hotkey.activationDelay = { [weak self] in self?.appState.holdDelay ?? 2.0 }
         hotkey.isActive = { [weak self] in self?.appState.isActive == true }
@@ -171,22 +211,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             else if !self.appState.isActive { self.overlay.hide() }
             if !warming { DispatchQueue.main.async { [weak self] in self?.updater.resumeWhenIdle() } }
         }
-        hotkey.onStart = { [weak self] in self?.startRecording() }
+        hotkey.onStart = { [weak self] in
+            if self?.appState.setupVisible == true && NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier { self?.appState.practiceShortcutVerified = true }
+            self?.startRecording()
+        }
         hotkey.onFinish = { [weak self] in self?.voice.finish() }
         hotkey.onCancel = { [weak self] in
             guard let self else { return }
             if self.appState.isActive { self.voice.cancel() }
-            else { self.overlay.hide(); self.inserter.clear() }
+            else { self.overlay.hide(); self.delivery.discardAnchor() }
         }
     }
 
-    private func startRecording() {
+    private func startRecording(practice: Bool = false) {
         guard !appState.isActive else { return }
         popover?.performClose(nil)
         overlay.hide()
-        if appState.shadowMode { inserter.clear() }
-        else { inserter.capture() }
+        appState.practiceSession = practice || (appState.setupVisible && NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier)
+        if appState.practiceSession {
+            appState.practiceHeardSignal = false
+            appState.practiceClipboardVerified = false
+            appState.practiceMessage = ""
+            appState.practiceText = ""
+        }
+        delivery.capture(allowInsertion: appState.autoInsertText && !appState.shadowMode && !appState.practiceSession)
         voice.start()
+        if appState.practiceSession && !appState.isActive {
+            appState.practiceMessage = appState.lastError ?? "Enable dictation in Connection first."
+            appState.practiceSession = false
+        }
+    }
+    private func openReviewWindow() {
+        popover?.performClose(nil)
+        guard !appState.completedText.isEmpty else { return }
+        if reviewWindow == nil {
+            reviewWindow = makeWindow(title: "Last prompt", size: NSSize(width: 650, height: 480), content: ResultReviewView().environmentObject(appState))
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        reviewWindow?.makeKeyAndOrderFront(nil)
     }
 
     private func setupMenuBar() {
@@ -266,6 +328,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window
     }
     private func settingsChanged() {
+        if !appState.clipboardUndoEnabled { delivery.expireClipboard() }
+        if boundShortcut != appState.shortcut || boundMode != appState.mode {
+            hotkey.reset(); boundShortcut = appState.shortcut; boundMode = appState.mode
+        }
         if appState.shadowMode { overlay.hide() }
         if !appState.voiceEnabled { voice.cancel() }
         refreshShortcut()
@@ -298,7 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationWillTerminate(_ notification: Notification) {
-        voice.dispose(); hotkey.stopListening(); overlay.hide(); sync.stop()
+        voice.dispose(); hotkey.stopListening(); overlay.hide(); delivery.expire(); sync.stop()
         permissionTimer?.invalidate()
         observers.forEach { NotificationCenter.default.removeObserver($0); NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }

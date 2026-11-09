@@ -10,13 +10,18 @@ private final class VoicePanel: NSPanel {
 @MainActor
 final class OverlayController {
     private var panels: [VoicePanel] = []
+    private var indicator: VoicePanel?
     private var dismissTask: Task<Void, Never>?
     private let state: AppState
     init(state: AppState) { self.state = state }
-    var isVisible: Bool { !panels.isEmpty }
+    var isVisible: Bool { !panels.isEmpty || indicator != nil }
 
     func show() {
-        guard !state.shadowMode else { hide(); return }
+        guard !state.practiceSession else { hide(); return }
+        if state.shadowMode {
+            if state.shadowIndicatorEnabled { showIndicator() } else { hide() }
+            return
+        }
         dismissTask?.cancel()
         if panels.isEmpty {
             let pointer = NSEvent.mouseLocation
@@ -49,6 +54,24 @@ final class OverlayController {
         panels.forEach { $0.allowsEditing = !state.isActive && !state.warmingUp }
     }
 
+    private func showIndicator() {
+        dismissTask?.cancel()
+        panels.forEach { $0.close() }; panels.removeAll()
+        guard indicator == nil else { return }
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
+        guard let frame = screen?.visibleFrame else { return }
+        let rect = NSRect(x: frame.midX - 140, y: frame.minY + 20, width: 280, height: 58)
+        let panel = VoicePanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
+        panel.level = .floating; panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.isReleasedWhenClosed = false
+        let content = NSHostingView(rootView: ShadowStatusView().environmentObject(state))
+        content.sizingOptions = []; content.autoresizingMask = [.width, .height]; panel.contentView = content
+        panel.setFrame(rect, display: false); indicator = panel; panel.orderFrontRegardless()
+    }
+
     func dismiss(after seconds: Double) {
         dismissTask?.cancel()
         dismissTask = Task { [weak self] in
@@ -62,5 +85,6 @@ final class OverlayController {
         dismissTask?.cancel(); dismissTask = nil
         panels.forEach { $0.close() }
         panels.removeAll()
+        indicator?.close(); indicator = nil
     }
 }

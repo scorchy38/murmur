@@ -8,6 +8,7 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var selection = "Dictation"
     @State private var apiKey = ""
+    @State private var diagnosticsStatus: String?
     @State private var savingError: String?
     @State private var connectionStatus: String?
     @State private var testing = false
@@ -18,6 +19,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
+                Label("Get started", systemImage: "checklist").tag("Setup")
                 Label("Dictation", systemImage: "waveform").tag("Dictation")
                 Label("Connection", systemImage: "key").tag("Connection")
                 Label("Usage", systemImage: "chart.bar.xaxis").tag("Usage")
@@ -27,19 +29,29 @@ struct SettingsView: View {
             .navigationSplitViewColumnWidth(165)
         } detail: {
             Form {
-                if selection == "Updates" { UpdateSettingsView() }
+                if selection == "Setup" { SetupView() }
+                else if selection == "Updates" { UpdateSettingsView() }
                 else if selection == "Connection" { connection }
                 else if selection == "Usage" { UsageSettingsView(store: appState.usageStore) }
                 else if selection == "Privacy" { privacy }
                 else { dictation }
             }
             .formStyle(.grouped)
-            .navigationTitle(selection)
+            .navigationTitle(selection == "Setup" ? "Get started" : selection)
         }
         .frame(minWidth: 650, minHeight: 530)
-        .onAppear { if !appState.hasCredential { selection = "Connection" } }
+        .onAppear {
+            if !appState.hasCredential || !appState.setupPracticePassed { selection = "Setup" }
+            appState.setupVisible = selection == "Setup"
+        }
+        .onChange(of: selection) { _, value in
+            appState.setupVisible = value == "Setup"
+            if value != "Setup" && appState.practiceSession { NotificationCenter.default.post(name: .cancelRecording, object: nil) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .selectSetupSettings)) { _ in selection = "Setup" }
+        .onReceive(NotificationCenter.default.publisher(for: .selectConnectionSettings)) { _ in selection = "Connection" }
         .onReceive(NotificationCenter.default.publisher(for: .selectUpdateSettings)) { _ in selection = "Updates" }
-        .onDisappear { testStream?.cancel(); testStream = nil; enableTask?.cancel(); enableTask = nil; enabling = false; testing = false; apiKey = "" }
+        .onDisappear { appState.setupVisible = false; if appState.practiceSession { NotificationCenter.default.post(name: .cancelRecording, object: nil) }; testStream?.cancel(); testStream = nil; enableTask?.cancel(); enableTask = nil; enabling = false; testing = false; apiKey = "" }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in appState.refreshPermissions() }
     }
 
@@ -49,11 +61,11 @@ struct SettingsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("A shortcut to your prompts").font(.headline)
-                        Text("Hold Shift, speak, then release to finish your prompt.")
+                        Text("\(appState.shortcutInstruction), speak, then \(appState.mode == .hold ? "release" : "tap again") to finish your prompt.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    ShortcutBadge()
+                    ShortcutBadge(title: appState.shortcut.symbol)
                 }.padding(.vertical, 8)
                 Toggle("Enable dictation", isOn: Binding(get: { appState.voiceEnabled }, set: { value in
                     if value { enable() }
@@ -69,12 +81,24 @@ struct SettingsView: View {
                     .onChange(of: appState.shadowMode) { _, _ in changed() }
                 Text("Dictate without the center-screen overlay. Completed text is copied to your clipboard, ready to paste. The menu bar icon still shows recording and processing; Escape cancels.")
                     .font(.caption).foregroundStyle(.secondary)
+                if appState.shadowMode {
+                    Toggle("Show a small status indicator", isOn: $appState.shadowIndicatorEnabled)
+                        .onChange(of: appState.shadowIndicatorEnabled) { _, _ in changed() }
+                    Text("An optional pill near the bottom of the screen confirms listening, finishing and completion without taking focus.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Picker("Shortcut", selection: $appState.voiceShortcutRaw) {
+                    ForEach(VoiceShortcut.allCases, id: \.rawValue) { shortcut in Text(shortcut.label).tag(shortcut.rawValue) }
+                }.disabled(appState.isActive)
+                    .onChange(of: appState.voiceShortcutRaw) { _, _ in changed() }
+                Text(appState.shortcut.conflictAdvice).font(.caption).foregroundStyle(.secondary)
                 Picker("Gesture", selection: $appState.voiceMode) {
-                    Text("Hold Shift").tag("hold")
-                    Text("Tap Shift to start / finish").tag("tap")
+                    Text("Hold to speak").tag("hold")
+                    Text("Tap to start / finish").tag("tap")
                 }
                 .disabled(appState.isActive)
-                if appState.mode == .hold {
+                .onChange(of: appState.voiceMode) { _, _ in changed() }
+                if appState.mode == .hold && appState.shortcut == .shift {
                     Picker("Hold delay", selection: $appState.holdDelay) {
                         Text("1.5 seconds").tag(1.5)
                         Text("2 seconds (default)").tag(2.0)
@@ -86,7 +110,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if appState.mode == .tap {
-                    Text("The tap gesture starts in an empty text field. Tap Shift again to finish; your words stay editable.")
+                    Text("The tap gesture starts in an empty text field. Tap the shortcut again to finish; your words stay editable.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Picker("Language", selection: $appState.language) {
@@ -105,10 +129,10 @@ struct SettingsView: View {
                 permissionRow("Microphone", granted: appState.microphoneGranted, path: "Privacy_Microphone")
                 permissionRow("Accessibility", granted: appState.accessibilityGranted, path: "Privacy_Accessibility")
                 if appState.voiceEnabled && !appState.shortcutListening {
-                    Text("Shift is waiting for Accessibility access. After granting it, Murmur reconnects the shortcut automatically. If Murmur is already allowed after replacing the app, turn its Accessibility switch off and on again.")
+                    Text("Your shortcut is waiting for Accessibility access. After granting it, Murmur reconnects the shortcut automatically. If Murmur is already allowed after replacing the app, turn its Accessibility switch off and on again.")
                         .font(.caption).foregroundStyle(.orange)
                 }
-                Text("Accessibility enables the Shift gesture and safe text insertion. You can also record from the menu bar.")
+                Text("Accessibility enables global shortcuts and safe text insertion. You can also record from the menu bar.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -166,6 +190,8 @@ struct SettingsView: View {
                     Button("Remove saved key", role: .destructive) {
                         do {
                             try VoiceCredential.delete()
+                            appState.lastConnectionCheck = nil
+                            appState.setupPracticePassed = false
                             appState.refreshPermissions()
                             appState.setEnabled(false)
                             connectionStatus = "Key removed. Dictation is off."
@@ -189,6 +215,12 @@ struct SettingsView: View {
                 Text("When enabled, saved transcriptions are shared with Murmur peers on your local network. Use this only on a trusted private network.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Undo and your clipboard") {
+                Toggle("Allow temporary clipboard restoration", isOn: $appState.clipboardUndoEnabled)
+                    .onChange(of: appState.clipboardUndoEnabled) { _, _ in changed() }
+                Text("For up to 60 seconds after dictation, Murmur can keep the previous clipboard in memory so Undo can restore it. Clipboard data marked private or larger than 1 MB is skipped. Another app's copy is never overwritten by Undo. Turning this off immediately forgets the retained clipboard; safe text insertion undo still works.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("While you dictate") {
                 Label("Audio streams only during an intentional recording.", systemImage: "mic")
                 Label("Recording audio stays in memory and is cleared after completion or cancellation.", systemImage: "memorychip")
@@ -200,6 +232,13 @@ struct SettingsView: View {
                 LabeledContent("Duration", value: String(format: "%.1f seconds", appState.lastDuration))
                 LabeledContent("Connection attempts", value: "\(appState.currentAttemptCount)")
                 LabeledContent("Audio", value: ByteCountFormatter.string(fromByteCount: Int64(appState.lastAudioBytes), countStyle: .file))
+                if let value = appState.lastConnectionLatency { LabeledContent("Connection ready", value: String(format: "%.2f seconds", value)) }
+                if let value = appState.lastFirstTextLatency { LabeledContent("First text", value: String(format: "%.2f seconds", value)) }
+                if let value = appState.lastFinalizationLatency { LabeledContent("Finishing", value: String(format: "%.2f seconds", value)) }
+                Button("Export diagnostics…") { exportDiagnostics() }
+                if let diagnosticsStatus { Text(diagnosticsStatus).font(.caption).foregroundStyle(.secondary) }
+                Text("The export contains counts, timings, permission states and bounded outcomes. No audio, prompt text, API key, vocabulary or field contents.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if let tokens = appState.lastUsageTokens { LabeledContent("Reported usage", value: "\(tokens) tokens") }
                 Text("Each connection or recovery attempt may incur usage, even if you cancel or no text is inserted. Operational logs contain counts and outcomes, not recorded speech.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -207,6 +246,17 @@ struct SettingsView: View {
         }
     }
 
+    private func exportDiagnostics() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Murmur-diagnostics.json"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try VoiceDiagnostics(state: appState).data().write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            diagnosticsStatus = "Diagnostics saved. You choose whether to share the file."
+        } catch { diagnosticsStatus = "Diagnostics could not be saved. Choose another location and try again." }
+    }
     private func permissionRow(_ name: String, granted: Bool, path: String) -> some View {
         HStack {
             Label(name, systemImage: granted ? "checkmark.circle.fill" : "circle")
@@ -227,6 +277,8 @@ struct SettingsView: View {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !appState.isActive else { return }
         do {
             try VoiceCredential.save(apiKey)
+            appState.lastConnectionCheck = nil
+            appState.setupPracticePassed = false
             apiKey = ""
             savingError = nil
             appState.refreshPermissions()
@@ -243,6 +295,7 @@ struct SettingsView: View {
         stream.onEvent = { event in
             switch event {
             case .ready:
+                appState.lastConnectionCheck = Date()
                 connectionStatus = "Connection ready. You can enable dictation."
                 testing = false; testStream?.cancel(); testStream = nil
             case .failure(let failure):
@@ -266,10 +319,11 @@ struct SettingsView: View {
             do {
                 try await AudioRecorder.probe()
                 try await NativeVoiceStream.check(credential: key, language: VoiceLanguage.resolve(appState.language).code)
+                appState.lastConnectionCheck = Date()
                 try Task.checkCancellation()
                 appState.refreshPermissions()
                 appState.setEnabled(true)
-                connectionStatus = "You’re ready. Hold Shift to speak."
+                connectionStatus = "You’re ready. \(appState.shortcutInstruction) to speak. Try Get started to verify delivery."
                 changed()
             } catch {
                 if !Task.isCancelled { savingError = error.localizedDescription }

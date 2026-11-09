@@ -6,6 +6,7 @@ import MurmurKit
 @MainActor
 final class HotkeyManager {
     var enabled: () -> Bool = { false }
+    var shortcut: () -> VoiceShortcut = { .shift }
     var mode: () -> VoiceMode = { .hold }
     var activationDelay: () -> Double = { 2.0 }
     var isActive: () -> Bool = { false }
@@ -14,6 +15,8 @@ final class HotkeyManager {
     var onStart: () -> Void = {}
     var onFinish: () -> Void = {}
     var onCancel: () -> Void = {}
+    private var alternateDown = false
+    private var alternateConsumed = false
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var warmup: Task<Void, Never>?
@@ -26,7 +29,7 @@ final class HotkeyManager {
     @discardableResult
     func startListening() -> Bool {
         if tap != nil { return true }
-        let mask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue)
+        let mask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, info in
             guard let info else { return Unmanaged.passUnretained(event) }
             return MainActor.assumeIsolated {
@@ -58,6 +61,9 @@ final class HotkeyManager {
             if canCancel(), key == 53 || (key == 8 && event.flags.contains(.maskControl)) {
                 reset(); onCancel(); return true
             }
+        }
+        if shortcut() != .shift { return handleAlternate(type, event: event) }
+        if type == .keyDown {
             if shiftDown {
                 blocked = true
                 warmup?.cancel(); onWarmup(false)
@@ -116,8 +122,73 @@ final class HotkeyManager {
         }
         return false
     }
+    private func handleAlternate(_ type: CGEventType, event: CGEvent) -> Bool {
+        let key = event.getIntegerValueField(.keyboardEventKeycode)
+        let modifiers = event.flags.intersection([.maskControl, .maskAlternate, .maskCommand, .maskShift, .maskSecondaryFn])
+        if shortcut() == .controlSpace, type == .keyUp, key == 49 {
+            let consumed = alternateConsumed
+            alternateConsumed = false
+            if alternateDown { releaseAlternate() }
+            return consumed
+        }
+        if type == .flagsChanged {
+            if shortcut() == .controlOption {
+                let down = modifiers == [.maskControl, .maskAlternate]
+                if down && !alternateDown { pressAlternate() }
+                else if !down && alternateDown {
+                    if !modifiers.intersection([.maskCommand, .maskShift, .maskSecondaryFn]).isEmpty { cancelAlternateAdmission() }
+                    else { releaseAlternate() }
+                }
+            } else if alternateDown && modifiers != .maskControl {
+                if !modifiers.intersection([.maskCommand, .maskShift, .maskAlternate, .maskSecondaryFn]).isEmpty { cancelAlternateAdmission() }
+                else { releaseAlternate() }
+            }
+            return false
+        }
+        if type == .keyDown {
+            if shortcut() == .controlSpace, key == 49, modifiers == .maskControl {
+                if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return alternateConsumed }
+                alternateConsumed = pressAlternate()
+                return alternateConsumed
+            }
+            if alternateDown {
+                blocked = true
+                if admitted && mode() == .hold { onCancel() }
+                admitted = false
+            }
+        }
+        return false
+    }
+    private func cancelAlternateAdmission() {
+        blocked = true
+        if admitted && mode() == .hold { onCancel() }
+        admitted = false
+        // Keep ownership of this press until release, so dropping the extra
+        // modifier cannot unexpectedly start a second recording.
+    }
+    @discardableResult private func pressAlternate() -> Bool {
+        guard enabled() else { return false }
+        alternateDown = true; blocked = false; pressedAt = Date()
+        if mode() == .hold {
+            guard !isActive() else { blocked = true; return false }
+            admitted = true; onStart()
+        }
+        return true
+    }
+    private func releaseAlternate() {
+        alternateDown = false
+        let wasAdmitted = admitted; admitted = false
+        if mode() == .hold {
+            if wasAdmitted { onFinish() }
+        } else if enabled(), !blocked, Date().timeIntervalSince(pressedAt) < 0.5, Date().timeIntervalSince(lastTap) >= 0.12 {
+            lastTap = Date()
+            if isActive() { onFinish() } else { onStart() }
+        }
+        blocked = false
+    }
     func reset() {
         warmup?.cancel(); warmup = nil
+        alternateDown = false; alternateConsumed = false
         shiftDown = false; admitted = false; blocked = false
         onWarmup(false)
     }

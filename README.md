@@ -4,7 +4,8 @@ Native dictation for Mac: hold Shift, speak, and watch your words take shape in 
 
 ## Features
 
-- **macOS 2.0**: Guarded hold-Shift or tap-Shift dictation, live Smart transcription, native Liquid Glass on macOS 26, editable result review, searchable history, Keychain credentials, safe text insertion, cancellation and streaming recovery.
+- **macOS**: Guarded hold-Shift or tap-Shift dictation, live Smart transcription, native Liquid Glass on macOS 26, editable result review, searchable history, Keychain credentials, safe text insertion, cancellation and streaming recovery.
+- **Setup and recovery**: Guided practice, alternate shortcuts, optional compact Shadow Mode feedback, guarded insertion/clipboard undo, and redacted diagnostics export. See [the reliability release and validation checklist](docs/reliability-release.md).
 - **iOS**: Standalone app with record button and transcription history. Includes a custom keyboard extension for system-wide voice input.
 - **watchOS**: Record from your wrist with a simple tap. View transcription history on a separate screen.
 - **Cross-device sync**: All devices discover each other via Bonjour and exchange transcriptions in real time over the local network. No cloud account required.
@@ -59,9 +60,9 @@ Download the latest build from [Releases](../../releases).
 1. Open **Murmur-Mac.dmg**
 2. Drag **Murmur** onto **Applications**, then eject the Murmur disk
 3. Open Murmur from Applications (first launch: right-click → **Open** if macOS asks)
-4. Open Murmur’s menu bar → **Set up Murmur** → **Connection**, save your Gemini API key, and enable dictation
+4. Open Murmur’s menu bar → **Set up Murmur** → **Get started**, then connect your Gemini API key and enable dictation
 5. Allow Microphone access; grant Accessibility in **Settings → Dictation** for the Shift gesture and text insertion
-6. Hold **Shift** alone for a moment, speak, then release to finish. Press **Escape** to cancel
+6. Try the guided practice, then hold **Shift** alone for a moment, speak, and release to finish. Alternate shortcuts are available in Dictation settings. Press **Escape** to cancel
 7. Review or copy the result if your original field changed or does not support safe insertion
 
 The Mac minimum remains macOS 14, with native Liquid Glass on macOS 26 and a material fallback on earlier supported versions. A different ad-hoc build can require macOS privacy permissions to be granted again.

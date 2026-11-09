@@ -28,6 +28,7 @@ final class VoiceController {
     private var inputClosed = false
     private var drainingCapture = false
     private var credential = ""
+    private var finishDate: Date?
     private var startDate = Date()
     private var breaker = VoiceCircuitBreaker()
     private var timers: [Task<Void, Never>] = []
@@ -72,6 +73,10 @@ final class VoiceController {
         state.currentAttemptCount = 0
         state.attempts = []
         state.lastUsageTokens = nil
+        state.lastConnectionLatency = nil
+        state.lastFirstTextLatency = nil
+        state.lastFinalizationLatency = nil
+        finishDate = nil
         state.isRecoveredText = false
         state.completedText = ""
         state.interimTranscript = ""
@@ -113,6 +118,7 @@ final class VoiceController {
 
     func finish() {
         guard state.isRecording else { return }
+        finishDate = Date()
         let tail = recorder.stop()
         drainingCapture = true
         startTask?.cancel()
@@ -234,6 +240,7 @@ final class VoiceController {
     private func event(_ event: VoiceEvent, owner: UUID) {
         switch event {
         case .ready:
+            if state.lastConnectionLatency == nil { state.lastConnectionLatency = Date().timeIntervalSince(startDate) }
             voiceLog.info("stream_ready attempt=\(self.state.currentAttemptCount)")
             everConnected = true
             state.connectionReady = true
@@ -258,6 +265,7 @@ final class VoiceController {
             }
         case .interim, .text:
             transcript.accept(event)
+            if transcript.receivedText && state.lastFirstTextLatency == nil { state.lastFirstTextLatency = Date().timeIntervalSince(startDate) }
             state.interimTranscript = transcript.preview
             if transcript.receivedText { breaker.succeeded() }
             if inputClosed { noDataTimer?.cancel() }
@@ -313,6 +321,7 @@ final class VoiceController {
         let duration = Double(totalBytes) / Double(VoiceAudio.bytesPerSecond)
         state.lastDuration = Double(totalBytes) / Double(VoiceAudio.bytesPerSecond)
         state.lastAudioBytes = totalBytes
+        state.lastFinalizationLatency = finishDate.map { Date().timeIntervalSince($0) }
         state.isRecoveredText = usedSalvage && !text.isEmpty
         if text.isEmpty, duration > 2, state.lastError == nil {
             state.lastError = (signal ? (everConnected ? VoiceFailure.noSpeech : .connection) : .noSignal).localizedDescription

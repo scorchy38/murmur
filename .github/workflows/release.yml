@@ -59,6 +59,9 @@ jobs:
       - name: Test voice contract
         run: swift test --package-path MurmurKit
 
+      - name: Test distribution guardrails
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
       - name: Test native voice lifecycle and gestures
         run: |
           xcodebuild test \
@@ -66,6 +69,18 @@ jobs:
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
             DEVELOPMENT_TEAM=""
+
+      - name: Configure optional Developer ID signing
+        id: signing
+        env:
+          MACOS_SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+        run: python3 scripts/configure-mac-signing.py
 
       - name: Archive macOS app
         run: |
@@ -75,9 +90,20 @@ jobs:
             -archivePath build/Murmur.xcarchive \
             MARKETING_VERSION="${{ steps.version.outputs.version }}" \
             CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
-            ENABLE_HARDENED_RUNTIME=NO \
-            CODE_SIGN_IDENTITY="-" \
-            DEVELOPMENT_TEAM=""
+            ENABLE_HARDENED_RUNTIME="${{ steps.signing.outputs.runtime }}" \
+            CODE_SIGN_IDENTITY="${{ steps.signing.outputs.identity }}" \
+            DEVELOPMENT_TEAM="${{ steps.signing.outputs.team }}" \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            CODE_SIGN_STYLE="${{ steps.signing.outputs.style }}" \
+            OTHER_CODE_SIGN_FLAGS="${{ steps.signing.outputs.signflags }}"
+
+      - name: Notarize and staple Mac app
+        if: steps.signing.outputs.notarize == 'true'
+        env:
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+        run: python3 scripts/notarize-mac.py build/Murmur.xcarchive/Products/Applications/Murmur.app --identity "${{ steps.signing.outputs.identity }}"
 
       # Ad-hoc builds have no Apple Team ID and cannot satisfy hardened
       # runtime's same-team library validation for embedded frameworks.
@@ -88,6 +114,14 @@ jobs:
       - name: Package drag-to-Applications installer
         run: |
           scripts/package-mac.sh build/Murmur.xcarchive/Products/Applications/Murmur.app build/Murmur-Mac.dmg
+
+      - name: Notarize and staple final installer
+        if: steps.signing.outputs.notarize == 'true'
+        env:
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+        run: python3 scripts/notarize-mac.py build/Murmur-Mac.dmg --identity "${{ steps.signing.outputs.identity }}"
 
       - name: Fetch pinned Sparkle signing tool
         env:
@@ -159,3 +193,10 @@ jobs:
             build/Murmur-Mac.dmg
             build/appcast.xml
             build/Murmur.ipa
+
+      - name: Remove temporary signing keychain
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/murmur-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/murmur-signing.keychain-db"
+          fi

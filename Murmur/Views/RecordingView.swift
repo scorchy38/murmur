@@ -130,7 +130,7 @@ struct RecordingView: View {
             if appState.isRecording {
                 VoiceMeter(levels: appState.audioLevels)
                 Spacer()
-                Text(appState.mode == .hold ? "Release ⇧ to finish" : "Tap ⇧ to finish")
+                Text(appState.mode == .hold ? "Release \(appState.shortcut.symbol) to finish" : "Tap \(appState.shortcut.symbol) to finish")
                     .font(.callout).foregroundStyle(.secondary)
                 Button("Finish") { NotificationCenter.default.post(name: .stopRecording, object: nil) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
@@ -148,9 +148,9 @@ struct RecordingView: View {
                         .buttonStyle(.borderedProminent)
                 } else {
                     Button(copied ? "Copied" : "Copy text", systemImage: copied ? "checkmark" : "doc.on.doc") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(editedText, forType: .string)
-                        copied = true
+                        appState.completedText = editedText
+                        NotificationCenter.default.post(name: .copyLastResult, object: nil)
+                        copied = appState.deliveryOutcome == "copied"
                     }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                 }
