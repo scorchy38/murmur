@@ -52,6 +52,7 @@ final class VoiceControllerTests: XCTestCase {
         stream.onEvent?(.interim("rename cash manager"))
         stream.onEvent?(.text("rename CacheManager"))
         stream.onEvent?(.endpoint)
+        stream.onEvent?(.turnComplete)
         try? await Task.sleep(for: .milliseconds(180))
         XCTAssertEqual(completed, ["rename CacheManager"])
         XCTAssertEqual(usage?.words, 2)
@@ -65,7 +66,7 @@ final class VoiceControllerTests: XCTestCase {
     func testCancellationRejectsAllLateCallbacksAndNeverCompletes() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture(); let stream = FakeStream()
-        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         var completions = 0
         controller.onComplete = { _, _ in completions += 1 }
         controller.start(); await settle()
@@ -85,7 +86,7 @@ final class VoiceControllerTests: XCTestCase {
     func testPermissionCompletionCannotResurrectCancelledRecording() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture()
-        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in FakeStream() }, credentialProvider: { "test" }, authorize: {
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in FakeStream() }, credentialProvider: { "test" }, drainWait: 1.5, authorize: {
             try? await Task.sleep(for: .milliseconds(100))
             return true
         })
@@ -100,7 +101,7 @@ final class VoiceControllerTests: XCTestCase {
     func testProcessingBlocksAnotherStartAndErrorsSalvageOnlyOnce() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture(); let stream = FakeStream()
-        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         var completed: [(String, Bool)] = []
         controller.onComplete = { completed.append(($0, $1)) }
         controller.start(); await settle()
@@ -125,7 +126,7 @@ final class VoiceControllerTests: XCTestCase {
         var streams: [FakeStream] = []
         let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in
             let stream = FakeStream(); streams.append(stream); return stream
-        }, credentialProvider: { "test" }, authorize: { true })
+        }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         controller.start(); await settle()
         streams[0].onEvent?(.failure(.connection))
         try? await Task.sleep(for: .milliseconds(320))
@@ -139,6 +140,7 @@ final class VoiceControllerTests: XCTestCase {
         XCTAssertEqual(streams[2].frames.reduce(0) { $0 + $1.count }, 3200)
         streams[2].onEvent?(.text("Recovered text"))
         streams[2].onEvent?(.endpoint)
+        streams[2].onEvent?(.turnComplete)
         try? await Task.sleep(for: .milliseconds(150))
         XCTAssertEqual(state.completedText, "Recovered text")
         XCTAssertEqual(state.currentAttemptCount, 3)
@@ -150,7 +152,7 @@ final class VoiceControllerTests: XCTestCase {
         var streams: [FakeStream] = []
         let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in
             let stream = FakeStream(); streams.append(stream); return stream
-        }, credentialProvider: { "test" }, authorize: { true })
+        }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         controller.start(); await settle()
         let obsoleteCallback = streams[0].onEvent
         obsoleteCallback?(.failure(.connection))
@@ -172,7 +174,7 @@ final class VoiceControllerTests: XCTestCase {
         var attempts = 0
         let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in
             attempts += 1; return stream
-        }, credentialProvider: { "test" }, authorize: { true })
+        }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         controller.start(); await settle()
         recorder.onAudio?(Data(repeating: 0, count: 96_000)); await settle()
         stream.onEvent?(.ready)
@@ -187,7 +189,7 @@ final class VoiceControllerTests: XCTestCase {
     func testFinishDrainsAcceptedCaptureBeforeResamplerTailAndClose() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture(); let stream = FakeStream()
-        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         controller.start(); await settle()
         stream.onEvent?(.ready)
         let frame = Data(repeating: 3, count: 3200)
@@ -205,7 +207,7 @@ final class VoiceControllerTests: XCTestCase {
     func testUsageSnapshotsKeepLatestReceiptAndCancellationOnlyOnce() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture(); let stream = FakeStream()
-        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
         var snapshots: [VoiceUsageSession] = []
         controller.onUsageSnapshot = { snapshots.append($0) }
         controller.start(); await settle()
@@ -221,6 +223,106 @@ final class VoiceControllerTests: XCTestCase {
         XCTAssertEqual(snapshots.last?.duration, 1)
         XCTAssertEqual(snapshots.last?.words, 0)
         XCTAssertEqual(snapshots.last?.attempts.first?.usage?.inputTokens, 200)
+    }
+
+    func testPersonalizationIsFrozenPerRecordingAndCountsSpokenWords() async throws {
+        let state = AppState(); state.voiceEnabled = true
+        try state.personalization.addWord(written: "CacheManager", spoken: "cash manager")
+        let recorder = FakeCapture(); let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
+        var usage: VoiceUsageSession?
+        controller.onUsageSnapshot = { usage = $0 }
+        controller.start(); await settle()
+        try state.personalization.addWord(written: "CacheStore", spoken: "cash store")
+        try state.personalization.setStyle(.chat)
+        stream.onEvent?(.ready)
+        controller.finish(); await settle()
+        stream.onEvent?(.text("cash manager.")); stream.onEvent?(.endpoint)
+        stream.onEvent?(.turnComplete)
+        try? await Task.sleep(for: .milliseconds(180))
+        XCTAssertEqual(state.completedText, "cash manager.")
+        XCTAssertEqual(state.originalTranscript, "cash manager.")
+        XCTAssertEqual(usage?.words, 2)
+        controller.dispose()
+    }
+    func testSnippetExpansionAndSalvagedCommandStayDistinct() async {
+        let state = AppState(); state.voiceEnabled = true
+        let recorder = FakeCapture(); let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 1.5, authorize: { true })
+        var usage: VoiceUsageSession?
+        controller.onUsageSnapshot = { usage = $0 }
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        controller.finish(); await settle()
+        stream.onEvent?(.text("Insert snippet review request.")); stream.onEvent?(.endpoint)
+        stream.onEvent?(.turnComplete)
+        try? await Task.sleep(for: .milliseconds(180))
+        XCTAssertTrue(state.completedText.hasPrefix("Please review this change"))
+        XCTAssertEqual(usage?.words, 4)
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        stream.onEvent?(.interim("insert snippet review request")); stream.onEvent?(.failure(.connection))
+        XCTAssertEqual(state.completedText, "insert snippet review request")
+        XCTAssertTrue(state.isRecoveredText)
+        controller.dispose()
+    }
+
+    func testLockedCredentialDoesNotStartCaptureAndProvidesUnlockAction() {
+        let state = AppState(); state.voiceEnabled = true; state.hasCredential = true
+        let recorder = FakeCapture()
+        let controller = VoiceController(state: state, recorder: recorder, credentialProvider: { nil }, authorize: { true })
+        controller.start()
+        XCTAssertEqual(recorder.starts, 0)
+        XCTAssertFalse(state.isActive)
+        XCTAssertTrue(state.credentialNeedsApproval)
+        XCTAssertEqual(state.lastError, VoiceFailure.keychain.localizedDescription)
+    }
+
+    func testEarlierFinalDoesNotEndRecordingAndDelayedTailSurvivesRelease() async {
+        let state = AppState(); state.voiceEnabled = true
+        let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        stream.onEvent?(.text("The first part.")); stream.onEvent?(.endpoint)
+        stream.onEvent?(.interim("Keep the last"))
+        controller.finish(); await settle()
+        try? await Task.sleep(for: .milliseconds(1800))
+        XCTAssertTrue(state.isTranscribing, "An earlier final must not close a lagging recording")
+        stream.onEvent?(.interim("Keep the last four or five words"))
+        try? await Task.sleep(for: .milliseconds(100))
+        stream.onEvent?(.text("Keep the last four or five words.")); stream.onEvent?(.endpoint)
+        stream.onEvent?(.turnComplete)
+        XCTAssertEqual(state.completedText, "The first part. Keep the last four or five words.")
+        XCTAssertFalse(state.isRecoveredText)
+        controller.dispose()
+    }
+    func testNewTailCancelsQuietFallbackAndTimeoutMarksRecovery() async {
+        let state = AppState(); state.voiceEnabled = true
+        let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 0.5, quietWait: 0.05, authorize: { true })
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        controller.finish(); await settle()
+        stream.onEvent?(.text("First segment")); stream.onEvent?(.endpoint)
+        stream.onEvent?(.interim("unfinished tail"))
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(state.isTranscribing)
+        try? await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(state.completedText, "First segment unfinished tail")
+        XCTAssertTrue(state.isRecoveredText)
+        controller.dispose()
+    }
+
+    func testFastServerTurnReceiptWaitsForInputDrainInsteadOfBeingLost() async {
+        let state = AppState(); state.voiceEnabled = true
+        let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        controller.finish()
+        stream.onEvent?(.text("Complete ending.")); stream.onEvent?(.endpoint); stream.onEvent?(.turnComplete)
+        XCTAssertTrue(state.isTranscribing)
+        await settle()
+        XCTAssertTrue(stream.finished)
+        XCTAssertEqual(state.completedText, "Complete ending.")
+        XCTAssertFalse(state.isRecoveredText)
+        controller.dispose()
     }
 
 }

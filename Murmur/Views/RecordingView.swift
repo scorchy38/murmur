@@ -8,6 +8,7 @@ struct RecordingView: View {
     var availableHeight: CGFloat = 800
     @State private var editedText = ""
     @State private var copied = false
+    @State private var learningBaseline = ""
     @State private var transcriptHeight: CGFloat = 100
 
     private var displayText: String { appState.isActive ? appState.interimTranscript : editedText }
@@ -43,6 +44,9 @@ struct RecordingView: View {
                         Text(notice).font(.callout).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    if !appState.isActive, !appState.learnedSpellingMessage.isEmpty {
+                        Text(appState.learnedSpellingMessage).font(.caption).foregroundStyle(.secondary)
+                    }
                     footer
                 }
                 .padding(32)
@@ -53,8 +57,14 @@ struct RecordingView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { editedText = appState.completedText }
-        .onChange(of: appState.completedText) { _, text in editedText = text; copied = false }
+        .onAppear { editedText = appState.completedText; learningBaseline = appState.completedText }
+        .onChange(of: appState.completedText) { _, text in editedText = text; learningBaseline = text; copied = false }
+        .task(id: editedText) {
+            let draft = editedText
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, !appState.isActive else { return }
+            appState.learnReviewedSpellings(original: learningBaseline, edited: draft)
+        }
         .animation(reducedMotion ? nil : .easeInOut(duration: 0.2), value: appState.recordingState)
         .accessibilityAction(.escape) { NotificationCenter.default.post(name: .cancelRecording, object: nil) }
     }
@@ -74,6 +84,7 @@ struct RecordingView: View {
             }
             Button {
                 NotificationCenter.default.post(name: .cancelRecording, object: nil)
+                appState.learnReviewedSpellings(original: learningBaseline, edited: editedText)
             } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
             .buttonStyle(.plain).foregroundStyle(.secondary)
             .help(appState.isActive ? "Cancel (Escape)" : "Dismiss")
@@ -148,6 +159,7 @@ struct RecordingView: View {
                         .buttonStyle(.borderedProminent)
                 } else {
                     Button(copied ? "Copied" : "Copy text", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                        appState.learnReviewedSpellings(original: learningBaseline, edited: editedText)
                         appState.completedText = editedText
                         NotificationCenter.default.post(name: .copyLastResult, object: nil)
                         copied = appState.deliveryOutcome == "copied"

@@ -13,6 +13,9 @@ struct SettingsView: View {
     @State private var connectionStatus: String?
     @State private var testing = false
     @State private var enabling = false
+    @State private var enableGeneration = UUID()
+    @State private var credentialTask: Task<Void, Never>?
+    @State private var saving = false
     @State private var testStream: (any VoiceStreaming)?
     @State private var enableTask: Task<Void, Never>?
 
@@ -22,6 +25,7 @@ struct SettingsView: View {
                 Label("Get started", systemImage: "checklist").tag("Setup")
                 Label("Dictation", systemImage: "waveform").tag("Dictation")
                 Label("Connection", systemImage: "key").tag("Connection")
+                Label("Personalize", systemImage: "character.book.closed").tag("Personalize")
                 Label("Usage", systemImage: "chart.bar.xaxis").tag("Usage")
                 Label("Privacy", systemImage: "hand.raised").tag("Privacy")
                 Label("Updates", systemImage: "arrow.triangle.2.circlepath").tag("Updates")
@@ -32,6 +36,7 @@ struct SettingsView: View {
                 if selection == "Setup" { SetupView() }
                 else if selection == "Updates" { UpdateSettingsView() }
                 else if selection == "Connection" { connection }
+                else if selection == "Personalize" { PersonalizationView(store: appState.personalization) }
                 else if selection == "Usage" { UsageSettingsView(store: appState.usageStore) }
                 else if selection == "Privacy" { privacy }
                 else { dictation }
@@ -48,10 +53,11 @@ struct SettingsView: View {
             appState.setupVisible = value == "Setup"
             if value != "Setup" && appState.practiceSession { NotificationCenter.default.post(name: .cancelRecording, object: nil) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .selectWordsSettings)) { _ in selection = "Personalize" }
         .onReceive(NotificationCenter.default.publisher(for: .selectSetupSettings)) { _ in selection = "Setup" }
         .onReceive(NotificationCenter.default.publisher(for: .selectConnectionSettings)) { _ in selection = "Connection" }
         .onReceive(NotificationCenter.default.publisher(for: .selectUpdateSettings)) { _ in selection = "Updates" }
-        .onDisappear { appState.setupVisible = false; if appState.practiceSession { NotificationCenter.default.post(name: .cancelRecording, object: nil) }; testStream?.cancel(); testStream = nil; enableTask?.cancel(); enableTask = nil; enabling = false; testing = false; apiKey = "" }
+        .onDisappear { appState.setupVisible = false; if appState.practiceSession { NotificationCenter.default.post(name: .cancelRecording, object: nil) }; enableGeneration = UUID(); credentialTask?.cancel(); credentialTask = nil; testStream?.cancel(); testStream = nil; enableTask?.cancel(); enableTask = nil; enabling = false; testing = false; apiKey = "" }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in appState.refreshPermissions() }
     }
 
@@ -72,7 +78,7 @@ struct SettingsView: View {
                     else { appState.setEnabled(false); changed() }
                 }))
                 .disabled(enabling)
-                if enabling { Text("Checking microphone and connection…").font(.caption).foregroundStyle(.secondary) }
+                if enabling { Text("Checking Keychain, microphone and connection…").font(.caption).foregroundStyle(.secondary) }
                 if let savingError { Text(savingError).font(.caption).foregroundStyle(.orange) }
             }
             Section("How you speak") {
@@ -114,6 +120,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Picker("Language", selection: $appState.language) {
+                    Text("Auto · multilingual").tag("auto")
                     ForEach(VoiceLanguage.supported, id: \.self) { code in
                         Text(Locale.current.localizedString(forLanguageCode: code) ?? code).tag(code)
                     }
@@ -159,11 +166,23 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { saveKey() }
                 HStack {
-                    Button("Save key") { saveKey() }.disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appState.isActive)
+                    Button(saving ? "Saving…" : "Save key") { saveKey() }.accessibilityLabel("Save key").accessibilityIdentifier("connection.save").disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appState.isActive || saving || testing || enabling)
                     Button(testing ? "Checking…" : "Test connection") { testConnection() }
-                        .disabled(!appState.hasCredential || testing || appState.isActive)
+                        .accessibilityLabel(testing ? "Checking connection" : "Test connection")
+                        .accessibilityIdentifier("connection.test")
+                        .disabled(!appState.hasCredential || testing || saving || enabling || appState.isActive)
                     Spacer()
                     Link("Get an API key", destination: URL(string: "https://aistudio.google.com/apikey")!)
+                }
+                if testing || enabling {
+                    Button("Cancel check", role: .cancel) {
+                        enableGeneration = UUID()
+                        credentialTask?.cancel(); credentialTask = nil
+                        enableTask?.cancel(); enableTask = nil
+                        testStream?.cancel(); testStream = nil
+                        testing = false; enabling = false
+                        connectionStatus = "Check cancelled. If macOS is still asking for Keychain approval, dismiss that dialog too."
+                    }
                 }
                 if let connectionStatus { Label(connectionStatus, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
                 if let savingError { Text(savingError).font(.caption).foregroundStyle(.orange) }
@@ -175,30 +194,27 @@ struct SettingsView: View {
                 Text("A connection check opens a speech session without recording audio. Your speech account’s pricing and quota apply to dictation.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Words you use") {
-                Text("Add a name, product, or technical term on each line. These hints are sent with your audio. Common coding terms are already included.")
+            Section("Make it yours") {
+                Button("Personal words, phrases and writing styles") { selection = "Personalize" }
+                Text("Your saved words are prioritized as recognition hints. Up to 100 hints are sent per session; your local spelling rules stay available even with a larger library.")
                     .font(.caption).foregroundStyle(.secondary)
-                TextEditor(text: $appState.vocabulary)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 95)
-                    .accessibilityLabel("Custom recognition vocabulary, one term per line")
-                Text("Up to 50 unique terms, within 1,024 characters. No files are scanned.")
-                    .font(.caption).foregroundStyle(.tertiary)
             }
             if appState.hasCredential {
                 Section {
                     Button("Remove saved key", role: .destructive) {
-                        do {
-                            try VoiceCredential.delete()
-                            appState.lastConnectionCheck = nil
-                            appState.setupPracticePassed = false
-                            appState.refreshPermissions()
-                            appState.setEnabled(false)
-                            connectionStatus = "Key removed. Dictation is off."
-                            changed()
-                        } catch { savingError = error.localizedDescription }
+                        saving = true
+                        Task { @MainActor in
+                            defer { saving = false }
+                            do {
+                                try await VoiceCredential.deleteAsync()
+                                appState.lastConnectionCheck = nil; appState.setupPracticePassed = false
+                                appState.credentialNeedsApproval = false
+                                appState.refreshPermissions(); appState.setEnabled(false)
+                                connectionStatus = "Key removed. Dictation is off."; changed()
+                            } catch { savingError = error.localizedDescription }
+                        }
                     }
-                    .disabled(appState.isActive || testing)
+                    .disabled(appState.isActive || testing || enabling || saving)
                 }
             }
         }
@@ -274,47 +290,67 @@ struct SettingsView: View {
         }
     }
     private func saveKey() {
-        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !appState.isActive else { return }
-        do {
-            try VoiceCredential.save(apiKey)
-            appState.lastConnectionCheck = nil
-            appState.setupPracticePassed = false
-            apiKey = ""
-            savingError = nil
-            appState.refreshPermissions()
-            connectionStatus = "Saved securely. Test the connection, then enable dictation."
-            changed()
-        } catch { savingError = error.localizedDescription }
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !appState.isActive, !saving else { return }
+        let value = apiKey; apiKey = ""; saving = true
+        Task { @MainActor in
+            defer { saving = false }
+            do {
+                try await VoiceCredential.saveAsync(value)
+                appState.lastConnectionCheck = nil; appState.setupPracticePassed = false
+                appState.credentialNeedsApproval = false
+                savingError = nil; appState.refreshPermissions()
+                connectionStatus = "Saved securely. Test the connection, then enable dictation."
+                changed()
+            } catch { savingError = error.localizedDescription }
+        }
     }
     private func testConnection() {
-        guard let key = VoiceCredential.read() else { return }
+        guard !testing, !enabling, !saving, !appState.isActive else { return }
         testing = true
-        connectionStatus = nil
-        let stream = NativeVoiceStream(credential: key, language: VoiceLanguage.resolve(appState.language).code, vocabulary: [], keepaliveEnabled: false)
-        testStream = stream
-        stream.onEvent = { event in
-            switch event {
-            case .ready:
-                appState.lastConnectionCheck = Date()
-                connectionStatus = "Connection ready. You can enable dictation."
-                testing = false; testStream?.cancel(); testStream = nil
-            case .failure(let failure):
-                connectionStatus = failure.localizedDescription
-                testing = false; testStream?.cancel(); testStream = nil
-            default: break
+        connectionStatus = "Waiting for Keychain access. Approve macOS’s prompt for Murmur if it appears."
+        credentialTask = Task { @MainActor in
+            let credential = await VoiceCredential.readAsync()
+            guard !Task.isCancelled else { return }
+            guard let key = credential else {
+                testing = false; appState.credentialNeedsApproval = appState.hasCredential
+                connectionStatus = (appState.hasCredential ? VoiceFailure.keychain : .credentials).localizedDescription
+                return
             }
+            connectionStatus = "Checking the speech connection…"
+            let stream = NativeVoiceStream(credential: key, language: VoiceLanguage.resolve(appState.language).code, vocabulary: [], keepaliveEnabled: false)
+            testStream = stream
+            stream.onEvent = { event in
+                switch event {
+                case .ready:
+                    appState.lastConnectionCheck = Date(); appState.credentialNeedsApproval = false
+                    connectionStatus = "Connection ready. You can enable dictation."
+                    testing = false; testStream?.cancel(); testStream = nil
+                case .failure(let failure):
+                    connectionStatus = failure.localizedDescription
+                    testing = false; testStream?.cancel(); testStream = nil
+                default: break
+                }
+            }
+            stream.start()
         }
-        stream.start()
     }
     private func enable() {
-        guard !enabling, !appState.isActive else { return }
+        guard !enabling, !testing, !saving, !appState.isActive else { return }
         savingError = nil
-        guard let key = VoiceCredential.read() else { savingError = "Save your API key in Connection first."; return }
         enabling = true
+        let owner = UUID(); enableGeneration = owner
         enableTask = Task { @MainActor in
-            defer { enabling = false }
+            defer { if enableGeneration == owner { enabling = false } }
+            let credential = await VoiceCredential.readAsync()
+            guard !Task.isCancelled else { return }
+            guard let key = credential else {
+                appState.credentialNeedsApproval = appState.hasCredential
+                savingError = (appState.hasCredential ? VoiceFailure.keychain : .credentials).localizedDescription
+                return
+            }
             let permission = AVCaptureDevice.authorizationStatus(for: .audio)
             let allowed = permission == .authorized ? true : await AVCaptureDevice.requestAccess(for: .audio)
+            guard !Task.isCancelled else { return }
             guard allowed else { savingError = VoiceFailure.permission.localizedDescription; return }
             do {
                 try await AudioRecorder.probe()

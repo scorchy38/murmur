@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
     @Published var notice: String?
     @Published var completedText = ""
+    @Published var credentialNeedsApproval = false
     @Published var hasCredential = VoiceCredential.isStored
     @Published var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     @Published var accessibilityGranted = AXIsProcessTrusted()
@@ -50,6 +51,33 @@ final class AppState: ObservableObject {
     var shortcutInstruction: String { "\(mode == .hold ? "Hold" : "Tap") \(shortcut.label)" }
     let store = MurmurStore()
     let usageStore = UsageStore()
+    let personalization = PersonalizationStore()
+    @Published var writingAppID: String?
+    @Published var writingAppName = "your apps"
+    @Published var completedRecordingID = UUID()
+    @Published var originalTranscript = ""
+    @Published var personalizationNotice = ""
+    @Published var recordingStyle = VoiceWritingStyle.natural
+    @Published var suggestCorrections: Bool { didSet { shadowPreferences.set(suggestCorrections, forKey: "suggestCorrections") } }
+    @Published var learnFromReview: Bool { didSet { shadowPreferences.set(learnFromReview, forKey: "learnFromReview") } }
+    @Published var learnedSpellingMessage = ""
+    @discardableResult func learnReviewedSpellings(original: String, edited: String) -> Int {
+        guard learnFromReview, !isActive, !original.isEmpty else { return 0 }
+        var count = 0
+        for change in VoiceCorrectionSuggestion.spellingEdits(original, edited) {
+            guard !personalization.library.words.contains(where: { $0.enabled && $0.appBundleID == nil && $0.written == change.written }) else { continue }
+            do { try personalization.addWord(written: change.written); count += 1 }
+            catch { learnedSpellingMessage = "Could not save this spelling: " + error.localizedDescription; return count }
+        }
+        if count > 0 { learnedSpellingMessage = "Remembered \(count) \(count == 1 ? "spelling" : "spellings") as recognition hints. Manage in Personalize → Words." }
+        return count
+    }
+    @Published var suggestedCorrection: VoiceCorrectionSuggestion?
+    func refreshWritingContext() {
+        guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              let identifier = app.bundleIdentifier else { return }
+        writingAppID = identifier; writingAppName = app.localizedName ?? identifier
+    }
 
     @AppStorage("voiceMode") var voiceMode: String = "hold"
     @Published var holdDelay: Double = UserDefaults.standard.object(forKey: "holdDelay") as? Double ?? 2.0 {
@@ -72,6 +100,8 @@ final class AppState: ObservableObject {
 
     init(shadowPreferences: UserDefaults = .standard) {
         self.shadowPreferences = shadowPreferences
+        self.learnFromReview = shadowPreferences.object(forKey: "learnFromReview") as? Bool ?? true
+        self.suggestCorrections = shadowPreferences.bool(forKey: "suggestCorrections")
         self.shadowMode = shadowPreferences.bool(forKey: "shadowMode")
         self.setupPracticePassed = shadowPreferences.bool(forKey: "setupPracticePassed")
         self.setupExternalPassed = shadowPreferences.bool(forKey: "setupExternalPassed")
@@ -86,7 +116,7 @@ final class AppState: ObservableObject {
     var isTranscribing: Bool { recordingState == .transcribing }
     var isActive: Bool { recordingState != .idle }
     var configuredVocabulary: [String] {
-        VoiceVocabulary.sanitized(VoiceVocabulary.coding + vocabulary.components(separatedBy: .newlines))
+        VoiceVocabulary.nativeHints(personalization.library.hints(for: writingAppID) + vocabulary.components(separatedBy: .newlines) + VoiceVocabulary.coding)
     }
     func completePractice(text: String, recovered: Bool, copied: Bool) {
         guard practiceSession else { return }

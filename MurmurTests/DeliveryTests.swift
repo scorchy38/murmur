@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import MurmurKit
 @testable import Murmur
 
 @MainActor
@@ -10,10 +11,13 @@ private final class FakeDeliveryTarget: VoiceTextDelivering {
     var undoCalls = 0
     var activations = 0
     var captures = 0
+    var correctionReads = 0
+    var correction: VoiceCorrectionSuggestion?
     func capture() { captures += 1 }
     func clear() {}
     func expireUndo() {}
     func activateOriginal() { activations += 1 }
+    func correctedInsertion() -> VoiceCorrectionSuggestion? { correctionReads += 1; return correction }
     func insert(_ text: String) -> TextInserter.Outcome { insertCalls += 1; return outcome }
     func undo() -> Bool { undoCalls += 1; return undoSucceeds }
 }
@@ -108,6 +112,27 @@ final class DeliveryTests: XCTestCase {
         delivery.deliver("second", insert: false)
         XCTAssertFalse(delivery.canUndo)
         delivery.expire()
+    }
+
+    func testCorrectionObservationRequiresOptInAndStopsWithOwnership() async {
+        let board = board(); defer { board.releaseGlobally() }
+        let target = FakeDeliveryTarget()
+        target.correction = VoiceCorrectionSuggestion.between("cash manager", "CacheManager")
+        let delivery = DeliveryController(clipboard: ClipboardDelivery(pasteboard: board), inserter: target)
+        var suggested: [VoiceCorrectionSuggestion] = []
+        delivery.onCorrection = { if let value = $0 { suggested.append(value) } }
+        delivery.deliver("cash manager", insert: true)
+        try? await Task.sleep(for: .milliseconds(700))
+        XCTAssertEqual(target.correctionReads, 0)
+        delivery.proposeCorrections = { true }
+        delivery.deliver("cash manager", insert: true)
+        try? await Task.sleep(for: .milliseconds(1400))
+        XCTAssertEqual(suggested.count, 1)
+        XCTAssertEqual(suggested.first?.written, "CacheManager")
+        delivery.expire()
+        let reads = target.correctionReads
+        try? await Task.sleep(for: .milliseconds(700))
+        XCTAssertEqual(target.correctionReads, reads)
     }
 
 }

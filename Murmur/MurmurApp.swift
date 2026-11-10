@@ -4,6 +4,9 @@ import MurmurKit
 import os
 
 extension Notification.Name {
+    static let selectWordsSettings = Notification.Name("selectWordsSettings")
+    static let showConnectionSettings = Notification.Name("showConnectionSettings")
+    static let showWordsSettings = Notification.Name("showWordsSettings")
     static let copyLastResult = Notification.Name("copyLastResult")
     static let retryLastInsertion = Notification.Name("retryLastInsertion")
     static let undoLastDelivery = Notification.Name("undoLastDelivery")
@@ -52,6 +55,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if NSClassFromString("XCTestCase") != nil { return }
+        #if DEBUG || MURMUR_EVALUATION
+        if let index = CommandLine.arguments.firstIndex(of: "--evaluate-speech"), CommandLine.arguments.count > index + 1 {
+            let directory = URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
+            Task { @MainActor in exit(await evaluateSyntheticSpeech(directory: directory)) }
+            return
+        }
+        #endif
         #if DEBUG
         if let index = CommandLine.arguments.firstIndex(of: "--preview"), CommandLine.arguments.count > index + 1 {
             libraryWindow = showVoicePreview(CommandLine.arguments[index + 1], state: appState)
@@ -87,6 +97,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if delegate.appState.isActive { delegate.voice.cancel() }
             else { delegate.overlay.hide(); delegate.delivery.discardAnchor() }
         }
+        observe(.showConnectionSettings) { delegate in
+            delegate.openSettingsWindow()
+            DispatchQueue.main.async { NotificationCenter.default.post(name: .selectConnectionSettings, object: nil) }
+        }
+        observe(.showWordsSettings) { delegate in
+            delegate.openSettingsWindow()
+            DispatchQueue.main.async { NotificationCenter.default.post(name: .selectWordsSettings, object: nil) }
+        }
+        observe(NSWorkspace.didActivateApplicationNotification, center: NSWorkspace.shared.notificationCenter) { $0.appState.refreshWritingContext() }
         observe(.openSettings) { $0.openSettingsWindow() }
         observe(.openLibrary) { $0.openLibraryWindow() }
         observe(.openShortcutPermissions) { delegate in
@@ -119,6 +138,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let smokeTest = CommandLine.arguments.contains("--smoke-test")
         if !smokeTest {
             appState.usageStore.open()
+            appState.personalization.open()
+            if !appState.vocabulary.isEmpty {
+                do { try appState.personalization.migrateLegacyVocabulary(appState.vocabulary); appState.vocabulary = "" }
+                catch { appState.notice = "Your existing vocabulary is still active. Open Personalize to review it." }
+            }
+            appState.refreshWritingContext()
             settingsChanged()
             #if !DEBUG
             appState.configureLoginItem()
@@ -135,6 +160,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureVoice() {
+        delivery.proposeCorrections = { [weak self] in self?.appState.suggestCorrections == true }
+        delivery.onCorrection = { [weak self] in self?.appState.suggestedCorrection = $0 }
         delivery.retainClipboardForUndo = { [weak self] in self?.appState.clipboardUndoEnabled ?? false }
         delivery.onChange = { [weak self] in
             guard let self else { return }
@@ -180,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             self.overlay.show()
-            if result == .inserted { self.overlay.dismiss(after: 1.8) }
+            if result == .inserted || result == .pasted { self.overlay.dismiss(after: 1.8) }
         }
         voice.onCancel = { [weak self] in
             guard let self else { return }
@@ -328,6 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window
     }
     private func settingsChanged() {
+        if !appState.suggestCorrections { delivery.stopLearning() }
         if !appState.clipboardUndoEnabled { delivery.expireClipboard() }
         if boundShortcut != appState.shortcut || boundMode != appState.mode {
             hotkey.reset(); boundShortcut = appState.shortcut; boundMode = appState.mode

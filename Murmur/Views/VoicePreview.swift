@@ -33,6 +33,18 @@ func showVoicePreview(_ scenario: String, state: AppState) -> NSWindow {
         ]
         root = AnyView(LibraryView(store: state.store).environmentObject(state))
         size = scenario == "library-small" ? NSSize(width: 900, height: 580) : NSSize(width: 1080, height: 720)
+    } else if scenario == "personal" {
+        state.recordingState = .idle
+        state.writingAppID = "com.example.editor"; state.writingAppName = "Codex"
+        try? state.personalization.addWord(written: "CacheManager", spoken: "cash manager; cache manager")
+        root = AnyView(Form { PersonalizationView(store: state.personalization) }.formStyle(.grouped).environmentObject(state))
+        size = NSSize(width: 560, height: 720)
+    } else if scenario == "personal-menu" {
+        state.recordingState = .idle; state.shortcutListening = true
+        state.writingAppID = "com.example.editor"; state.writingAppName = "Codex"
+        state.store.transcriptions = [Transcription(text: "Please update CacheManager. Do not change the public interface.", device: "Mac")]
+        root = AnyView(MenuBarView(store: state.store).environmentObject(state))
+        size = NSSize(width: 354, height: 560)
     } else if scenario == "setup" {
         state.recordingState = .idle
         state.hasCredential = true; state.microphoneGranted = true

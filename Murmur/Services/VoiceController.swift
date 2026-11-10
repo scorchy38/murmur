@@ -10,12 +10,19 @@ final class VoiceController {
     typealias StreamFactory = @MainActor (String, String, [String]) -> any VoiceStreaming
     private let state: AppState
     private let recorder: any VoiceCapturing
-    private let streamFactory: StreamFactory
+    private let streamFactory: StreamFactory?
     private let credentialProvider: () -> String?
     private let authorize: () async -> Bool
+    private let drainWait: Double
+    private let quietWait: Double
     private var stream: (any VoiceStreaming)?
     private var generation = UUID()
     private var attempt = 0
+    private var sessionLibrary = VoicePersonalization.starter
+    private var sessionApp: String?
+    private var sessionStyle = VoiceWritingStyle.natural
+    private var sessionVocabulary: [String] = []
+    private var sessionLanguage = "en"
     private var transcript = VoiceTranscript()
     private var pending: [Data] = []
     private var pendingBytes = 0
@@ -26,6 +33,9 @@ final class VoiceController {
     private var replaying = false
     private var retried = false
     private var inputClosed = false
+    private var postCloseFinal = false
+    private var turnCompletedAfterRelease = false
+    private var completionTimer: Task<Void, Never>?
     private var drainingCapture = false
     private var credential = ""
     private var finishDate: Date?
@@ -42,11 +52,12 @@ final class VoiceController {
     var onComplete: ((String, Bool) -> Void)?
     var onCancel: (() -> Void)?
 
-    init(state: AppState, recorder: (any VoiceCapturing)? = nil, streamFactory: @escaping StreamFactory = { NativeVoiceStream(credential: $0, language: $1, vocabulary: $2) }, credentialProvider: @escaping () -> String? = { VoiceCredential.read() }, authorize: @escaping () async -> Bool = {
+    init(state: AppState, recorder: (any VoiceCapturing)? = nil, streamFactory: StreamFactory? = nil, credentialProvider: @escaping () -> String? = { VoiceCredential.read(interactive: false) }, drainWait: Double = 10, quietWait: Double = 2, authorize: @escaping () async -> Bool = {
         let permission = AVCaptureDevice.authorizationStatus(for: .audio)
         if permission == .notDetermined { return await AVCaptureDevice.requestAccess(for: .audio) }
         return permission == .authorized
     }) {
+        self.drainWait = drainWait; self.quietWait = quietWait
         self.state = state
         self.recorder = recorder ?? AudioRecorder()
         self.streamFactory = streamFactory
@@ -61,14 +72,24 @@ final class VoiceController {
         state.notice = nil
         guard state.voiceEnabled else { showFailure(.credentials); return }
         guard breaker.admits() else { showFailure(.paused); return }
-        guard let key = credentialProvider() else { showFailure(.credentials); return }
+        guard let key = credentialProvider() else { state.credentialNeedsApproval = state.hasCredential; showFailure(state.hasCredential ? .keychain : .credentials); return }
+        state.credentialNeedsApproval = false
+        state.refreshWritingContext()
+        sessionLibrary = state.personalization.library
+        sessionApp = state.writingAppID
+        sessionStyle = state.practiceSession ? .natural : sessionLibrary.style(for: sessionApp)
+        sessionVocabulary = state.configuredVocabulary
+        sessionLanguage = state.language
+        state.recordingStyle = sessionStyle
+        state.learnedSpellingMessage = ""
+        state.originalTranscript = ""; state.personalizationNotice = ""; state.suggestedCorrection = nil
         generation = UUID()
         let owner = generation
         credential = key
         transcript = VoiceTranscript()
         pending.removeAll(); replayAudio.removeAll()
         pendingBytes = 0; totalBytes = 0; signal = false; everConnected = false
-        replaying = false; retried = false; inputClosed = false; attempt = 0
+        replaying = false; retried = false; inputClosed = false; postCloseFinal = false; turnCompletedAfterRelease = false; attempt = 0
         drainingCapture = false
         state.currentAttemptCount = 0
         state.attempts = []
@@ -128,7 +149,7 @@ final class VoiceController {
         state.audioLevels = Array(repeating: 0, count: 16)
         let owner = generation
         // Independent hard drain bound starts on release, even if setup is stalled.
-        schedule(seconds: 5, owner: owner) { $0.drainEnded(owner: owner) }
+        schedule(seconds: 15, owner: owner) { $0.drainEnded(owner: owner) }
         // All microphone callbacks accepted before stop were enqueued ahead of
         // this block. Keep those frames in order, then append resampler tail.
         DispatchQueue.main.async { [weak self] in
@@ -148,6 +169,7 @@ final class VoiceController {
         checkpoint(outcome: "cancelled")
         cleanup()
         transcript = VoiceTranscript()
+        state.originalTranscript = ""; state.personalizationNotice = ""; state.suggestedCorrection = nil
         state.interimTranscript = ""
         state.completedText = ""
         state.warmingUp = false
@@ -176,10 +198,11 @@ final class VoiceController {
         state.attempts.append(VoiceAttemptSummary())
         let summaryID = state.attempts.last!.id
         state.connectionReady = false
-        inputClosed = false
-        let language = VoiceLanguage.resolve(state.language)
+        inputClosed = false; postCloseFinal = false; turnCompletedAfterRelease = false
+        completionTimer?.cancel(); completionTimer = nil
+        let language = VoiceLanguage.resolve(sessionLanguage)
         if language.usedFallback { state.notice = "This language is not supported yet. Using English." }
-        let stream = streamFactory(credential, language.code, state.configuredVocabulary)
+        let stream = streamFactory?(credential, language.code, sessionVocabulary) ?? NativeVoiceStream(credential: credential, language: language.code, vocabulary: sessionVocabulary, mode: sessionStyle.transcriptionMode)
         self.stream = stream
         stream.onEvent = { [weak self, weak stream] event in
             guard let self, self.generation == owner else {
@@ -255,25 +278,34 @@ final class VoiceController {
             inputClosed = true
             if state.isTranscribing {
                 noDataTimer?.cancel()
+                // Sending activityEnd is not a receipt for all speech. Keep
+                // waiting for authoritative text, including a lagging tail.
                 noDataTimer = Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(1500))
+                    try? await Task.sleep(for: .seconds(self?.drainWait ?? 10))
                     guard !Task.isCancelled, let self, self.generation == owner else { return }
                     self.drainEnded(owner: owner)
                 }
-                if transcript.authoritativeSegments > 0 { noDataTimer?.cancel() }
-                if transcript.authoritativeSegments > 0 { completeSoon(owner: owner) }
+                if turnCompletedAfterRelease { complete(owner: owner, salvaged: transcript.authoritativeSegments == 0 || !transcript.hypothesis.isEmpty) }
             }
         case .interim, .text:
+            completionTimer?.cancel(); completionTimer = nil
             transcript.accept(event)
+            if case .text = event, inputClosed { postCloseFinal = true }
             if transcript.receivedText && state.lastFirstTextLatency == nil { state.lastFirstTextLatency = Date().timeIntervalSince(startDate) }
             state.interimTranscript = transcript.preview
             if transcript.receivedText { breaker.succeeded() }
-            if inputClosed { noDataTimer?.cancel() }
             resetInactivity(owner: owner)
         case .endpoint:
             transcript.accept(event)
             state.interimTranscript = transcript.preview
-            if state.isTranscribing && inputClosed { completeSoon(owner: owner) }
+            if state.isTranscribing && inputClosed && postCloseFinal { completeSoon(owner: owner) }
+        case .turnComplete:
+            if state.isTranscribing {
+                // A fast server can reply while the activityEnd send is still
+                // resuming. Latch its receipt until capture/input have drained.
+                turnCompletedAfterRelease = true
+                if inputClosed { complete(owner: owner, salvaged: transcript.authoritativeSegments == 0 || !transcript.hypothesis.isEmpty) }
+            }
         case .usage: break // Accounted against the originating connection above.
         case .failure(let failure):
             if !failure.isFatal, !transcript.receivedText, !retried, state.isRecording {
@@ -302,22 +334,32 @@ final class VoiceController {
             state.notice = "Recovering your recording…"
             schedule(seconds: 0.25, owner: owner) { controller in
                 controller.connect(owner: owner)
-                controller.schedule(seconds: 5, owner: owner) { $0.complete(owner: owner, salvaged: true) }
+                controller.schedule(seconds: 15, owner: owner) { $0.complete(owner: owner, salvaged: true) }
             }
             voiceLog.info("silent_drop_replay")
-        } else { complete(owner: owner, salvaged: transcript.authoritativeSegments == 0) }
+        } else { complete(owner: owner, salvaged: true) }
     }
 
     private func completeSoon(owner: UUID) {
-        // Let usage receipts in the same event batch settle before closing the attempt.
-        schedule(seconds: 0.1, owner: owner) { $0.complete(owner: owner, salvaged: false) }
+        // Some providers omit turnComplete. A post-close segment can finish
+        // only after a quiet window; subsequent text cancels this fallback.
+        completionTimer?.cancel()
+        completionTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(self?.quietWait ?? 2))
+            guard !Task.isCancelled, let self, self.generation == owner else { return }
+            self.complete(owner: owner, salvaged: false)
+        }
     }
 
     private func complete(owner: UUID, salvaged: Bool) {
         guard generation == owner, state.isActive else { return }
         let usedSalvage = salvaged || !transcript.hypothesis.isEmpty
         transcript.salvage()
-        let text = transcript.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        let recognized = transcript.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        state.originalTranscript = recognized
+        let personalized = usedSalvage || state.practiceSession ? VoicePersonalizedText(text: recognized) : VoicePersonalizer.process(recognized, library: sessionLibrary, app: sessionApp, style: sessionStyle)
+        let text = personalized.text
+        state.personalizationNotice = personalized.expandedSnippet ? "Snippet expanded" : personalized.formattedIdentifier ? "Identifier formatted" : personalized.corrections > 0 ? "Personal spelling applied" : ""
         let duration = Double(totalBytes) / Double(VoiceAudio.bytesPerSecond)
         state.lastDuration = Double(totalBytes) / Double(VoiceAudio.bytesPerSecond)
         state.lastAudioBytes = totalBytes
@@ -328,11 +370,12 @@ final class VoiceController {
         }
         generation = UUID()
         settleAttempt(state.lastError != nil ? "error" : usedSalvage ? "salvaged" : "completed")
-        checkpoint(outcome: text.isEmpty ? "empty" : "completed", words: VoiceUsageSession.countWords(text))
+        checkpoint(outcome: text.isEmpty ? "empty" : "completed", words: VoiceUsageSession.countWords(recognized))
         cleanup()
         state.recordingState = .idle
         state.interimTranscript = ""
         state.completedText = text
+        state.completedRecordingID = UUID()
         if state.isRecoveredText { state.notice = "Recovered preview. Review before using." }
         onPresentation?()
         if !text.isEmpty {
@@ -397,6 +440,7 @@ final class VoiceController {
         recorder.stop()
         stream?.cancel(); stream = nil
         startTask?.cancel(); startTask = nil
+        completionTimer?.cancel(); completionTimer = nil
         noDataTimer?.cancel(); noDataTimer = nil
         inactivityTimer?.cancel(); inactivityTimer = nil
         cancelTimers()

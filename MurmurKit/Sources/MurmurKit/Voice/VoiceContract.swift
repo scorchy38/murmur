@@ -24,11 +24,12 @@ public struct VoiceAttemptSummary: Codable, Equatable, Sendable, Identifiable {
 public enum VoiceMode: String, CaseIterable, Sendable { case hold, tap }
 
 public enum VoiceFailure: String, Error, LocalizedError, Sendable {
-    case credentials, permission, device, connection, quota, limit, noSignal, noSpeech, paused, setup, unsupported
+    case credentials, keychain, permission, device, connection, quota, limit, noSignal, noSpeech, paused, setup, unsupported
 
     public var errorDescription: String? {
         switch self {
         case .credentials: "Your speech credential was not accepted. Update it in Settings → Connection."
+        case .keychain: "Open Settings → Connection and choose Test connection to unlock your saved speech key. Your saved key has not been removed."
         case .permission: "Allow microphone access for Murmur in System Settings → Privacy & Security → Microphone."
         case .device: "The microphone could not start. Check your input device in System Settings → Sound."
         case .connection: "The speech connection was interrupted. Check your connection and try again."
@@ -42,7 +43,7 @@ public enum VoiceFailure: String, Error, LocalizedError, Sendable {
         }
     }
 
-    public var isFatal: Bool { [.credentials, .permission, .quota, .limit, .unsupported, .setup].contains(self) }
+    public var isFatal: Bool { [.credentials, .keychain, .permission, .quota, .limit, .unsupported, .setup].contains(self) }
 }
 
 /// Product events. Provider field names and credentials stay in the adapter.
@@ -52,6 +53,7 @@ public enum VoiceEvent: Equatable, Sendable {
     case interim(String)
     case text(String)
     case endpoint
+    case turnComplete
     case usage(VoiceUsage)
     case failure(VoiceFailure)
     case closed
@@ -154,6 +156,7 @@ public struct VoiceLanguage: Equatable, Sendable {
     ]
     public static func resolve(_ value: String) -> Self {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if value == "auto" { return Self(code: "auto", usedFallback: false) }
         if value.isEmpty { return Self(code: "en", usedFallback: false) }
         if supported.contains(value) { return Self(code: value, usedFallback: false) }
         if let code = names[value] { return Self(code: code, usedFallback: false) }
@@ -164,6 +167,18 @@ public struct VoiceLanguage: Equatable, Sendable {
 }
 
 public enum VoiceVocabulary {
+    /// Native JSON vocabulary is not constrained by the legacy ASCII header.
+    public static func nativeHints(_ terms: [String]) -> [String] {
+        var seen = Set<String>(), result: [String] = []
+        var length = 0
+        for term in terms {
+            let value = term.unicodeScalars.map { CharacterSet.whitespacesAndNewlines.contains($0) ? " " : CharacterSet.controlCharacters.contains($0) ? "" : String($0) }.joined().split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            guard !value.isEmpty, value.count <= 100, seen.insert(value.lowercased()).inserted else { continue }
+            guard result.count < 100, length + value.count <= 10_000 else { break }
+            result.append(value); length += value.count
+        }
+        return result
+    }
     public static let coding = ["MCP", "symlink", "grep", "regex", "localhost", "codebase", "TypeScript", "JSON", "OAuth", "webhook", "gRPC", "dotfiles", "subagent", "worktree"]
     public static func sanitized(_ terms: [String]) -> [String] {
         var seen = Set<String>()

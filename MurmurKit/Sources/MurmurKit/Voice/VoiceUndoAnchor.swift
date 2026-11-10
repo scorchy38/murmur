@@ -24,5 +24,16 @@ public struct VoiceUndoAnchor: Sendable {
     public func matches(text: String, selection: NSRange) -> Bool {
         text == expected && selection == NSRange(location: cursor, length: 0)
     }
+    public func correctedSpan(in current: String) -> String? {
+        let source = expected as NSString, value = current as NSString
+        let left = source.substring(to: insertedRange.location)
+        let right = source.substring(from: NSMaxRange(insertedRange))
+        let leftCount = (left as NSString).length, rightCount = (right as NSString).length
+        guard value.length >= leftCount + rightCount,
+              value.substring(to: leftCount).compare(left, options: .literal) == .orderedSame,
+              value.substring(from: value.length - rightCount).compare(right, options: .literal) == .orderedSame else { return nil }
+        return value.substring(with: NSRange(location: leftCount, length: value.length - leftCount - rightCount))
+    }
+    public var insertedText: String { (expected as NSString).substring(with: insertedRange) }
     public var restoredText: String { (expected as NSString).replacingCharacters(in: insertedRange, with: originalText) }
 }

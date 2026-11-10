@@ -58,9 +58,11 @@ public struct VoiceUsageTotals: Sendable {
     public var typingSecondsSaved: Double { max(0, Double(words) / 40 * 60 - duration) }
     public init(sessions: [VoiceUsageSession]) {
         for session in sessions {
-            words += session.words; duration += session.duration
-            if session.words > 0 { prompts += 1 }
-            longestPrompt = max(longestPrompt, session.words)
+            if session.outcome != "diagnostic" {
+                words += session.words; duration += session.duration
+                if session.words > 0 { prompts += 1 }
+                longestPrompt = max(longestPrompt, session.words)
+            }
             estimatedCost += session.estimatedCost
             for attempt in session.attempts {
                 attempts += 1

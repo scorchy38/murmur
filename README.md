@@ -6,6 +6,8 @@ Native dictation for Mac: hold Shift, speak, and watch your words take shape in 
 
 - **macOS**: Guarded hold-Shift or tap-Shift dictation, live Smart transcription, native Liquid Glass on macOS 26, editable result review, searchable history, Keychain credentials, safe text insertion, cancellation and streaming recovery.
 - **Setup and recovery**: Guided practice, alternate shortcuts, optional compact Shadow Mode feedback, guarded insertion/clipboard undo, and redacted diagnostics export. See [the reliability release and validation checklist](docs/reliability-release.md).
+- **Personal vocabulary**: Saved names and technical spellings guide Gemini’s recognition using the audio and context. Murmur does not replace homophones after recognition. Stable name corrections in Murmur’s own editors can become vocabulary hints; this can be disabled in Personalize. Edits elsewhere are not automatically learned.
+- **Editor compatibility**: Native Accessibility insertion where supported, with a guarded paste path for web and terminal editors. The original app and field must remain focused; text is also kept on the clipboard.
 - **iOS**: Standalone app with record button and transcription history. Includes a custom keyboard extension for system-wide voice input.
 - **watchOS**: Record from your wrist with a simple tap. View transcription history on a separate screen.
 - **Cross-device sync**: All devices discover each other via Bonjour and exchange transcriptions in real time over the local network. No cloud account required.

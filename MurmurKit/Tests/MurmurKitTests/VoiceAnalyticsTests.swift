@@ -74,4 +74,12 @@ final class VoiceAnalyticsTests: XCTestCase {
         XCTAssertEqual(VoiceUsageSession.estimateTextTokens(""), 0)
     }
 
+    func testDiagnosticsCountCostWithoutInflatingDictationStats() {
+        var attempt = VoiceAttemptSummary(); attempt.usage = VoiceUsage(inputTokens: 100, outputTokens: 20)
+        let totals = VoiceUsageTotals(sessions: [.init(duration: 12, words: 30, outcome: "diagnostic", attempts: [attempt])])
+        XCTAssertEqual(totals.words, 0); XCTAssertEqual(totals.duration, 0); XCTAssertEqual(totals.prompts, 0)
+        XCTAssertEqual(totals.inputTokens, 100)
+        XCTAssertGreaterThan(totals.estimatedCost, 0)
+    }
+
 }

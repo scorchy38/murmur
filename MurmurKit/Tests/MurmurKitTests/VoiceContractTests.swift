@@ -34,18 +34,21 @@ final class VoiceContractTests: XCTestCase {
         XCTAssertEqual(transcript.authoritativeSegments, 0)
     }
 
-    func testProviderCorrectsBeforeEndpointAndIgnoresDuplicateFinalAndLateInterim() {
+    func testProviderCommitsSegmentsAndOnlyIgnoresTextAfterTurnComplete() {
         var normalizer = VoiceProviderNormalizer()
         XCTAssertEqual(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "rename cash manager"]]]), [.interim("rename cash manager")])
         let final: [String: Any] = ["serverContent": ["inputTranscription": ["text": "rename CacheManager"]]]
         XCTAssertEqual(normalizer.events(final), [.text("rename CacheManager"), .endpoint])
         XCTAssertTrue(normalizer.events(final).isEmpty)
+        XCTAssertEqual(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "next segment"]]]), [.interim("next segment")])
+        XCTAssertEqual(normalizer.events(["serverContent": ["inputTranscription": ["text": "Next segment."]]]), [.text("Next segment."), .endpoint])
+        XCTAssertEqual(normalizer.events(["serverContent": ["turnComplete": true]]), [.turnComplete])
         XCTAssertTrue(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "obsolete"]]]).isEmpty)
     }
 
     func testTurnCompleteDoesNotInventAuthoritativeText() {
         var normalizer = VoiceProviderNormalizer()
-        XCTAssertEqual(normalizer.events(["serverContent": ["turnComplete": true]]), [])
+        XCTAssertEqual(normalizer.events(["serverContent": ["turnComplete": true]]), [.turnComplete])
         XCTAssertEqual(normalizer.events(["serverContent": ["inputTranscription": ["text": 123]]]), [])
         XCTAssertEqual(normalizer.events(["unknown": true]), [])
     }

@@ -16,6 +16,7 @@ public final class NativeVoiceStream: VoiceStreaming {
     private let credential: String
     private let language: String
     private let vocabulary: [String]
+    private let mode: VoiceTranscriptionMode
     private let keepaliveEnabled: Bool
     private var socket: URLSessionWebSocketTask?
     private var session: URLSession?
@@ -33,19 +34,20 @@ public final class NativeVoiceStream: VoiceStreaming {
     private var started = false
     private var normalizer = VoiceProviderNormalizer()
 
-    public init(credential: String, language: String, vocabulary: [String], keepaliveEnabled: Bool = true) {
+    public init(credential: String, language: String, vocabulary: [String], keepaliveEnabled: Bool = true, mode: VoiceTranscriptionMode = .smart) {
+        self.mode = mode
         self.credential = credential
         self.language = VoiceLanguage.resolve(language).code
-        self.vocabulary = VoiceVocabulary.sanitized(vocabulary)
+        self.vocabulary = VoiceVocabulary.nativeHints(vocabulary)
         self.keepaliveEnabled = keepaliveEnabled
     }
 
-    public static func setup(language: String, vocabulary: [String]) -> [String: Any] {
+    public static func setup(language: String, vocabulary: [String], mode: VoiceTranscriptionMode = .smart) -> [String: Any] {
         ["setup": [
             "model": "models/gemini-3.5-transcribe-live",
             "generationConfig": ["responseModalities": ["TEXT"]],
             "realtimeInputConfig": ["automaticActivityDetection": ["disabled": true]],
-            "inputAudioTranscription": ["mode": "SMART", "languageCodes": [language], "customVocabulary": vocabulary]
+            "inputAudioTranscription": ["mode": mode.rawValue, "languageCodes": language == "auto" ? [] : [language], "customVocabulary": vocabulary]
         ]]
     }
 
@@ -72,7 +74,7 @@ public final class NativeVoiceStream: VoiceStreaming {
         receiveTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.write(Self.setup(language: self.language, vocabulary: self.vocabulary))
+                try await self.write(Self.setup(language: self.language, vocabulary: self.vocabulary, mode: self.mode))
                 while !Task.isCancelled && !self.cancelled {
                     let message = try await socket.receive()
                     guard !self.cancelled else { return }
@@ -237,10 +239,12 @@ final class VoicePingCompletion: @unchecked Sendable {
     }
 }
 
-/// Manual mode has one utterance per attempt. A repeated final or a late close
-/// cannot create a second endpoint. Completion without text is never a fake final.
+/// Final transcripts commit individual speech segments; they do not end the
+/// recording. Only the server turn boundary ends a manual speech turn.
 public struct VoiceProviderNormalizer {
-    private var finalized = false
+    private var turnEnded = false
+    private var lastFinal: String?
+    private var interimSinceFinal = false
     public init() {}
     public mutating func events(_ json: [String: Any]) -> [VoiceEvent] {
         if let error = json["error"] as? [String: Any] {
@@ -252,15 +256,23 @@ public struct VoiceProviderNormalizer {
             }
         }
         var result: [VoiceEvent] = []
-        if let content = json["serverContent"] as? [String: Any], !finalized {
+        if let content = json["serverContent"] as? [String: Any], !turnEnded {
             if let interim = content["interimInputTranscription"] as? [String: Any], let text = interim["text"] as? String {
+                interimSinceFinal = true
                 result.append(.interim(text))
             }
             if let final = content["inputTranscription"] as? [String: Any], let text = final["text"] as? String,
                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                result.append(.text(text))
-                result.append(.endpoint)
-                finalized = true
+                if text != lastFinal || interimSinceFinal {
+                    result.append(.text(text))
+                    result.append(.endpoint)
+                    lastFinal = text
+                }
+                interimSinceFinal = false
+            }
+            if content["turnComplete"] as? Bool == true {
+                turnEnded = true
+                result.append(.turnComplete)
             }
         }
         if let usage = json["usageMetadata"] as? [String: Any] {

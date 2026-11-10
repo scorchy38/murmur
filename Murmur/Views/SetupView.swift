@@ -1,4 +1,5 @@
 import SwiftUI
+import MurmurKit
 
 struct SetupView: View {
     @EnvironmentObject var state: AppState
@@ -83,6 +84,8 @@ struct SetupView: View {
 
 struct ResultReviewView: View {
     @EnvironmentObject var state: AppState
+    @State private var baseline = ""
+    @State private var learnedMessage: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Your last prompt").font(.title2.bold())
@@ -90,14 +93,44 @@ struct ResultReviewView: View {
             TextEditor(text: $state.completedText)
                 .font(.system(size: 18)).scrollContentBackground(.hidden)
                 .accessibilityLabel("Last prompt")
+            if let suggestion = VoiceCorrectionSuggestion.between(baseline, state.completedText) {
+                Button("Remember \(suggestion.spoken) → \(suggestion.written)", systemImage: "sparkles") {
+                    do {
+                        try state.personalization.addWord(written: suggestion.written, spoken: suggestion.spoken)
+                        learnedMessage = "Remembered as a recognition hint for future dictations."
+                        baseline = state.completedText
+                    } catch { learnedMessage = error.localizedDescription }
+                }
+            }
+            if !state.learnedSpellingMessage.isEmpty { Text(state.learnedSpellingMessage).font(.caption).foregroundStyle(.secondary) }
+            if let learnedMessage { Text(learnedMessage).font(.caption).foregroundStyle(.secondary) }
+            if !state.originalTranscript.isEmpty && state.originalTranscript != state.completedText {
+                DisclosureGroup("Original recognition") {
+                    Text(state.originalTranscript).font(.callout).textSelection(.enabled)
+                    Button("Copy original") {
+                        baseline = state.originalTranscript
+                        state.completedText = state.originalTranscript
+                        NotificationCenter.default.post(name: .copyLastResult, object: nil)
+                    }
+                }
+            }
             HStack {
                 Text(state.deliveryMessage).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Copy", systemImage: "doc.on.doc") {
+                    state.learnReviewedSpellings(original: baseline, edited: state.completedText)
                     NotificationCenter.default.post(name: .copyLastResult, object: nil)
                 }.buttonStyle(.borderedProminent)
             }
         }.padding(24).frame(minWidth: 480, minHeight: 320)
+        .task(id: state.completedText) {
+            let draft = state.completedText
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            state.learnReviewedSpellings(original: baseline, edited: draft)
+        }
+        .onAppear { baseline = state.completedText }
+        .onChange(of: state.completedRecordingID) { _, _ in baseline = state.completedText; learnedMessage = nil }
     }
 }
 

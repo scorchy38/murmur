@@ -9,6 +9,7 @@ protocol VoiceTextDelivering: AnyObject {
     func clear()
     func expireUndo()
     func activateOriginal()
+    func correctedInsertion() -> VoiceCorrectionSuggestion?
 }
 
 /// Owns only Murmur's clipboard write, never a general clipboard history.
@@ -62,15 +63,18 @@ final class ClipboardDelivery {
 
 @MainActor
 final class DeliveryController {
-    enum Status: String { case none, inserted, copied, changed, unavailable, clipboardFailed, undone }
+    enum Status: String { case none, inserted, pasted, copied, changed, unavailable, clipboardFailed, undone }
     private let clipboard: ClipboardDelivery
     private let inserter: any VoiceTextDelivering
+    private var correctionWatch: Task<Void, Never>?
     private var expiry: Task<Void, Never>?
     private var inserted = false
     private var undoAvailable = false
     private(set) var status: Status = .none
     private(set) var message = ""
     private(set) var text = ""
+    var proposeCorrections: () -> Bool = { false }
+    var onCorrection: ((VoiceCorrectionSuggestion?) -> Void)?
     var retainClipboardForUndo: () -> Bool = { true }
     var onChange: (() -> Void)?
     var canUndo: Bool { undoAvailable && (inserted || clipboard.canRestore) }
@@ -96,6 +100,7 @@ final class DeliveryController {
             guard !Task.isCancelled else { return }
             self?.expire(); self?.onChange?()
         }
+        if inserted { watchCorrections() }
         onChange?()
         return status
     }
@@ -108,6 +113,7 @@ final class DeliveryController {
         guard canRetry else { return }
         // The inserter rechecks the captured process, element, text and selection.
         applyInsertion(text, copied: false)
+        if inserted { watchCorrections() }
         undoAvailable = inserted || clipboard.canRestore
         onChange?()
     }
@@ -123,14 +129,33 @@ final class DeliveryController {
         expire(); status = .undone; onChange?()
     }
     func expireClipboard() { clipboard.expire(); onChange?() }
+    func stopLearning() { correctionWatch?.cancel(); correctionWatch = nil; onCorrection?(nil) }
     func expire() {
+        stopLearning()
         expiry?.cancel(); expiry = nil
         clipboard.expire(); inserter.expireUndo()
         inserted = false; undoAvailable = false
     }
+    private func watchCorrections() {
+        correctionWatch?.cancel()
+        guard proposeCorrections() else { return }
+        correctionWatch = Task { [weak self] in
+            var candidate: VoiceCorrectionSuggestion?
+            var announced: VoiceCorrectionSuggestion?
+            for _ in 0..<30 {
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled, let self, self.proposeCorrections() else { return }
+                let next = self.inserter.correctedInsertion()
+                if let next, next == candidate, next != announced { self.onCorrection?(next); announced = next }
+                if next == nil && candidate != nil { self.onCorrection?(nil) }
+                candidate = next
+            }
+        }
+    }
     private func applyInsertion(_ text: String, copied: Bool) {
         switch inserter.insert(text) {
         case .inserted: inserted = true; status = .inserted; message = "Inserted into your original field."
+        case .pasted: inserted = false; status = .pasted; message = "Paste sent to your original field. A copy is on the clipboard."
         case .changed: status = .changed; message = "Your field or cursor changed. \(copied ? "Copied instead;" : "Return to the original field, then") try again or review the result."
         case .unavailable: status = .unavailable; message = copied ? "Copied. This field couldn't accept direct insertion." : "The original field is unavailable. Copy or review your result."
         }

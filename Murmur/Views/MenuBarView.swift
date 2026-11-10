@@ -19,8 +19,8 @@ struct MenuBarView: View {
                 }
                     .font(.headline)
                 Spacer()
-                Circle().fill(appState.voiceEnabled ? (appState.shortcutListening ? Color.green : Color.orange) : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
-                Text(appState.voiceEnabled ? (appState.shortcutListening ? "Ready" : "Shortcut setup") : "Set up")
+                Circle().fill(appState.voiceEnabled ? (appState.shortcutListening && !appState.credentialNeedsApproval ? Color.green : Color.orange) : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                Text(appState.voiceEnabled ? (appState.credentialNeedsApproval ? "Unlock key" : appState.shortcutListening ? "Ready" : "Shortcut setup") : "Set up")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if appState.isActive {
@@ -51,8 +51,9 @@ struct MenuBarView: View {
                         Text(appState.shadowMode ? "Shadow Mode · Clipboard only" : "Your words appear where you work.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Button { post(.startRecording) } label: {
-                    Label("Start dictation", systemImage: "mic.fill").frame(maxWidth: .infinity)
+                WritingContextView(store: appState.personalization)
+                Button { post(appState.credentialNeedsApproval ? .showConnectionSettings : .startRecording) } label: {
+                    Label(appState.credentialNeedsApproval ? "Unlock speech key" : "Start dictation", systemImage: appState.credentialNeedsApproval ? "key" : "mic.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
             } else {
@@ -67,17 +68,35 @@ struct MenuBarView: View {
                 Button("Set up Murmur") { post(.openSettings) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
             }
+            if appState.credentialNeedsApproval && !appState.voiceEnabled {
+                Button("Unlock speech key", systemImage: "key") { post(.showConnectionSettings) }
+                    .buttonStyle(.borderedProminent)
+            }
             if let error = appState.lastError {
                 Label(error, systemImage: "exclamationmark.circle")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let suggestion = appState.suggestedCorrection, !appState.isActive {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("\(suggestion.spoken) → \(suggestion.written)").font(.caption).lineLimit(2)
+                    HStack {
+                        Button("Remember spelling") {
+                            do { try appState.personalization.addWord(written: suggestion.written, spoken: suggestion.spoken); appState.suggestedCorrection = nil; appState.deliveryMessage = "Remembered as a recognition hint." }
+                            catch { appState.deliveryMessage = error.localizedDescription }
+                        }
+                        Button("Dismiss") { appState.suggestedCorrection = nil }
+                    }.font(.caption).buttonStyle(.borderless)
+                }
+            }
             if !appState.isActive && !appState.completedText.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     if !appState.deliveryMessage.isEmpty { Text(appState.deliveryMessage).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                    if !appState.personalizationNotice.isEmpty { Text(appState.personalizationNotice).font(.caption).foregroundStyle(.secondary) }
                     HStack {
                         Button("Copy again") { post(.copyLastResult) }
                         Button("Review") { post(.reviewLastResult) }
+                        Button("Teach") { post(.showWordsSettings) }
                         if appState.deliveryCanUndo { Button("Undo") { post(.undoLastDelivery) }.help("Undo Murmur's unchanged insertion or restore its previous clipboard, within 60 seconds") }
                     }.buttonStyle(.borderless).font(.caption)
                     if appState.deliveryCanRetry { Button("Try original field again") { post(.retryLastInsertion) }.font(.caption) }

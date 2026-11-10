@@ -75,6 +75,9 @@ struct UsageSettingsView: View {
             }
             Text("Includes recording retries and recovery connections, including cancelled recordings. Audio estimates use bytes queued for the service, which may exceed delivered audio if a connection fails. Output estimates use final transcript length; any unfinalized output is unknown. Reported counts replace estimates when available. Setup checks and other apps or devices are not included.")
                 .font(.caption).foregroundStyle(.secondary)
+            if filtered.contains(where: { $0.outcome == "diagnostic" }) {
+                Text("Includes service checks on this Mac. They do not count toward your words or dictation time.").font(.caption).foregroundStyle(.secondary)
+            }
             Text("Gemini 3.5 Transcribe Live: $3.50 / 1M audio input tokens and $21.00 / 1M text output tokens. Rates checked 8 November 2026 and saved with each recording. This is a USD estimate, not your Google bill; free tier, credits and taxes can change what you pay.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
