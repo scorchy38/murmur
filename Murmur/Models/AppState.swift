@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
     @Published var notice: String?
     @Published var completedText = ""
+    @Published var canRetryTranscription = false
     @Published var credentialNeedsApproval = false
     @Published var hasCredential = VoiceCredential.isStored
     @Published var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
@@ -51,6 +52,9 @@ final class AppState: ObservableObject {
     var shortcutInstruction: String { "\(mode == .hold ? "Hold" : "Tap") \(shortcut.label)" }
     let store = MurmurStore()
     let usageStore = UsageStore()
+    let diagnostics = DiagnosticStore()
+    var diagnosticRecordingID: UUID?
+    let recovery = RecoveryStore()
     let personalization = PersonalizationStore()
     @Published var writingAppID: String?
     @Published var writingAppName = "your apps"
@@ -147,7 +151,7 @@ final class AppState: ObservableObject {
         audioLevels.append(CGFloat(level))
         if practiceSession && level > 0.01 { practiceHeardSignal = true }
     }
-    func clearHistory() { store.clear() }
+    func clearHistory() { store.clear(); recovery.clear() }
     func configureLoginItem() {
         let status = SMAppService.mainApp.status
         if launchAtLoginRequested && status != .enabled && status != .requiresApproval { setLaunchAtLogin(true) }

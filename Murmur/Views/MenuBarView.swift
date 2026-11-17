@@ -30,7 +30,7 @@ struct MenuBarView: View {
                     Text(appState.interimTranscript).lineLimit(3).foregroundStyle(.secondary)
                 }
                 HStack {
-                    Button("Cancel", role: .cancel) { post(.cancelRecording) }
+                    Button("Stop & keep draft", role: .cancel) { post(.cancelRecording) }
                     Spacer()
                     if appState.isRecording { Button("Finish") { post(.stopRecording) }.buttonStyle(.borderedProminent) }
                 }
@@ -76,6 +76,10 @@ struct MenuBarView: View {
                 Label(error, systemImage: "exclamationmark.circle")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if appState.canRetryTranscription && !appState.isActive {
+                Button("Retry last recording", systemImage: "arrow.clockwise") { post(.retryTranscription) }
+                    .help("Uses audio held in memory for up to five minutes; no need to speak again")
             }
             if let suggestion = appState.suggestedCorrection, !appState.isActive {
                 VStack(alignment: .leading, spacing: 5) {

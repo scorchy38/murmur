@@ -25,7 +25,7 @@ struct SetupView: View {
                 check("Global shortcut listening", passed: state.shortcutListening)
                 HStack {
                     ShortcutBadge(title: state.shortcut.symbol)
-                    Text(state.shortcutInstruction + " to speak. Escape cancels.")
+                    Text(state.shortcutInstruction + " to speak. Escape stops and keeps your draft.")
                 }
                 if !state.accessibilityGranted {
                     Button("Allow Accessibility") { post(.openShortcutPermissions) }
@@ -42,7 +42,7 @@ struct SetupView: View {
                         Text(state.isRecording ? "Listening…" : "Finishing…").font(.callout)
                         Spacer()
                         if state.isRecording { Button("Finish") { post(.stopRecording) } }
-                        Button("Cancel", role: .cancel) { post(.cancelRecording) }
+                        Button("Stop", role: .cancel) { post(.cancelRecording) }
                     }
                     Text(state.interimTranscript.isEmpty ? "Your words will appear here." : state.interimTranscript)
                         .frame(maxWidth: .infinity, alignment: .leading)

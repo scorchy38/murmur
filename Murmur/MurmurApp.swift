@@ -8,6 +8,7 @@ extension Notification.Name {
     static let showConnectionSettings = Notification.Name("showConnectionSettings")
     static let showWordsSettings = Notification.Name("showWordsSettings")
     static let copyLastResult = Notification.Name("copyLastResult")
+    static let retryTranscription = Notification.Name("retryTranscription")
     static let retryLastInsertion = Notification.Name("retryLastInsertion")
     static let undoLastDelivery = Notification.Name("undoLastDelivery")
     static let reviewLastResult = Notification.Name("reviewLastResult")
@@ -77,6 +78,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard !delegate.appState.completedText.isEmpty else { return }
             delegate.delivery.deliver(delegate.appState.completedText, insert: false)
         }
+        observe(.retryTranscription) { delegate in
+            delegate.popover?.performClose(nil)
+            delegate.delivery.discardAnchor()
+            delegate.voice.retryTranscription()
+            if delegate.appState.isTranscribing { delegate.delivery.recordingID = delegate.appState.diagnosticRecordingID }
+        }
         observe(.retryLastInsertion) { delegate in
             delegate.popover?.performClose(nil)
             delegate.overlay.hide()
@@ -94,7 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observe(.startRecording) { $0.startRecording() }
         observe(.stopRecording) { $0.voice.finish() }
         observe(.cancelRecording) { delegate in
-            if delegate.appState.isActive { delegate.voice.cancel() }
+            if delegate.appState.isActive {
+                if let id = delegate.appState.diagnosticRecordingID { delegate.appState.diagnostics.record(.interruptionRequested, id: id, values: .init(trigger: .userStop), force: true) }
+                delegate.voice.cancel()
+            }
             else { delegate.overlay.hide(); delegate.delivery.discardAnchor() }
         }
         observe(.showConnectionSettings) { delegate in
@@ -127,9 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observe(NSApplication.didResignActiveNotification) { delegate in
             if delegate.settingsWindow?.isVisible == true { delegate.appState.refreshPermissions() }
         }
-        observe(NSWorkspace.willSleepNotification, center: NSWorkspace.shared.notificationCenter) { $0.voice.cancel(); $0.overlay.hide() }
+        observe(NSWorkspace.willSleepNotification, center: NSWorkspace.shared.notificationCenter) { $0.interruptVoice(.appSleep); $0.overlay.hide() }
         observe(NSApplication.didChangeScreenParametersNotification) { delegate in
-            delegate.voice.cancel(); delegate.overlay.hide()
+            delegate.interruptVoice(.displayChanged); delegate.overlay.hide()
         }
         // Permissions can be changed while the app remains a background menu extra.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
@@ -138,6 +148,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let smokeTest = CommandLine.arguments.contains("--smoke-test")
         if !smokeTest {
             appState.usageStore.open()
+            appState.diagnostics.open()
+            appState.recovery.open()
+            if appState.saveHistory, let draft = appState.recovery.draft {
+                appState.completedText = draft.text
+                appState.originalTranscript = draft.text
+                appState.isRecoveredText = true
+                appState.notice = "Recovered your last draft. Review or copy it from the menu."
+            } else if !appState.saveHistory { appState.recovery.clear() }
             appState.personalization.open()
             if !appState.vocabulary.isEmpty {
                 do { try appState.personalization.migrateLegacyVocabulary(appState.vocabulary); appState.vocabulary = "" }
@@ -160,6 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureVoice() {
+        delivery.onDiagnostic = { [weak self] kind, values in
+            guard let self, let id = self.delivery.recordingID else { return }
+            self.appState.diagnostics.record(kind, id: id, values: values, force: true)
+        }
         delivery.proposeCorrections = { [weak self] in self?.appState.suggestCorrections == true }
         delivery.onCorrection = { [weak self] in self?.appState.suggestedCorrection = $0 }
         delivery.retainClipboardForUndo = { [weak self] in self?.appState.clipboardUndoEnabled ?? false }
@@ -243,6 +265,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.startRecording()
         }
         hotkey.onFinish = { [weak self] in self?.voice.finish() }
+        hotkey.onInterruptionReason = { [weak self] reason in
+            guard let self, let id = self.appState.diagnosticRecordingID else { return }
+            self.appState.diagnostics.record(.interruptionRequested, id: id, values: .init(trigger: reason), force: true)
+        }
         hotkey.onCancel = { [weak self] in
             guard let self else { return }
             if self.appState.isActive { self.voice.cancel() }
@@ -261,8 +287,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appState.practiceMessage = ""
             appState.practiceText = ""
         }
+        let recordingID = UUID()
+        delivery.recordingID = recordingID
+        appState.diagnostics.begin(recordingID)
         delivery.capture(allowInsertion: appState.autoInsertText && !appState.shadowMode && !appState.practiceSession)
-        voice.start()
+        voice.start(recordingID: recordingID)
         if appState.practiceSession && !appState.isActive {
             appState.practiceMessage = appState.lastError ?? "Enable dictation in Connection first."
             appState.practiceSession = false
@@ -354,6 +383,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         return window
     }
+    private func interruptVoice(_ trigger: DiagnosticTrigger) {
+        if appState.isActive, let id = appState.diagnosticRecordingID { appState.diagnostics.record(.interruptionRequested, id: id, values: .init(trigger: trigger), force: true) }
+        voice.cancel()
+    }
     private func settingsChanged() {
         if !appState.suggestCorrections { delivery.stopLearning() }
         if !appState.clipboardUndoEnabled { delivery.expireClipboard() }
@@ -361,7 +394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkey.reset(); boundShortcut = appState.shortcut; boundMode = appState.mode
         }
         if appState.shadowMode { overlay.hide() }
-        if !appState.voiceEnabled { voice.cancel() }
+        if !appState.voiceEnabled { interruptVoice(.disabled) }
         refreshShortcut()
         if appState.syncEnabled && !syncing {
             syncing = true
@@ -393,6 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationWillTerminate(_ notification: Notification) {
         voice.dispose(); hotkey.stopListening(); overlay.hide(); delivery.expire(); sync.stop()
+        appState.diagnostics.flushBeforeExit()
         permissionTimer?.invalidate()
         observers.forEach { NotificationCenter.default.removeObserver($0); NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }

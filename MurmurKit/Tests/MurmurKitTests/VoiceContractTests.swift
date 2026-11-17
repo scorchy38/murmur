@@ -34,7 +34,7 @@ final class VoiceContractTests: XCTestCase {
         XCTAssertEqual(transcript.authoritativeSegments, 0)
     }
 
-    func testProviderCommitsSegmentsAndOnlyIgnoresTextAfterTurnComplete() {
+    func testProviderCommitsSegmentsWithoutTreatingConversationalTurnCompleteAsPermanentClosure() {
         var normalizer = VoiceProviderNormalizer()
         XCTAssertEqual(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "rename cash manager"]]]), [.interim("rename cash manager")])
         let final: [String: Any] = ["serverContent": ["inputTranscription": ["text": "rename CacheManager"]]]
@@ -43,7 +43,7 @@ final class VoiceContractTests: XCTestCase {
         XCTAssertEqual(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "next segment"]]]), [.interim("next segment")])
         XCTAssertEqual(normalizer.events(["serverContent": ["inputTranscription": ["text": "Next segment."]]]), [.text("Next segment."), .endpoint])
         XCTAssertEqual(normalizer.events(["serverContent": ["turnComplete": true]]), [.turnComplete])
-        XCTAssertTrue(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "obsolete"]]]).isEmpty)
+        XCTAssertEqual(normalizer.events(["serverContent": ["interimInputTranscription": ["text": "next turn"]]]), [.interim("next turn")])
     }
 
     func testTurnCompleteDoesNotInventAuthoritativeText() {
@@ -125,4 +125,10 @@ final class VoiceContractTests: XCTestCase {
         var anchor = try XCTUnwrap(VoiceAnchor(text: "abcd", selection: NSRange(location: 2, length: 0)))
         XCTAssertEqual(anchor.replacement("", current: "abcd")?.text, "abcd")
     }
+    func testExplicitlyUnfinishedTranscriptionIsNeverACompletionReceipt() {
+        var normalizer = VoiceProviderNormalizer()
+        XCTAssertEqual(normalizer.events(["serverContent": ["inputTranscription": ["text": "Provisional", "finished": false]]]), [.interim("Provisional")])
+        XCTAssertEqual(normalizer.events(["serverContent": ["inputTranscription": ["text": "Provisional", "finished": true]]]), [.text("Provisional"), .endpoint])
+    }
+
 }

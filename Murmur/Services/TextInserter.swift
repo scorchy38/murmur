@@ -102,6 +102,7 @@ private struct SystemTextInsertion: TextInsertionEnvironment {
 @MainActor
 final class TextInserter: VoiceTextDelivering {
     enum Outcome { case inserted, pasted, changed, unavailable }
+    var onDiagnostic: ((DiagnosticValues) -> Void)?
     private let environment: any TextInsertionEnvironment
     private var capturedText: String?
     private var capturedSelection: NSRange?
@@ -133,54 +134,67 @@ final class TextInserter: VoiceTextDelivering {
 
     func capture() {
         clear()
-        guard environment.trusted, !environment.secureInput,
-              let process = environment.frontmostPID,
-              process != ProcessInfo.processInfo.processIdentifier,
-              let focused = environment.focused(in: process), !environment.secure(focused),
-              environment.pasteable(focused) else { return }
+        guard environment.trusted else { report(.noAccessibility); return }
+        guard !environment.secureInput else { report(.secureInput); return }
+        guard let process = environment.frontmostPID, process != ProcessInfo.processInfo.processIdentifier else { report(.noExternalApp); return }
         self.process = process
+        guard let focused = environment.focused(in: process) else { report(.noFocusedElement); return }
+        guard !environment.secure(focused) else { report(.secureField); return }
+        guard environment.pasteable(focused) else { report(.unsupportedEditor); return }
         element = focused
         capturedText = environment.text(focused)
         capturedSelection = environment.selection(focused)
         if let text = capturedText, let range = capturedSelection { anchor = VoiceAnchor(text: text, selection: range) }
+        report(.targetReady)
     }
 
     func insert(_ text: String) -> Outcome {
-        guard let element, !text.isEmpty, environment.trusted, !environment.secureInput,
-              !environment.secure(element) else { return .unavailable }
-        guard environment.frontmostPID == process,
-              let focused = environment.focused(in: process), CFEqual(focused, element) else { return .changed }
+        guard let element else { report(.noTarget); return .unavailable }
+        guard !text.isEmpty else { report(.emptyText); return .unavailable }
+        guard environment.trusted else { report(.noAccessibility); return .unavailable }
+        guard !environment.secureInput else { report(.secureInput); return .unavailable }
+        guard !environment.secure(element) else { report(.secureField); return .unavailable }
+        guard environment.frontmostPID == process else { report(.appChanged); return .changed }
+        guard let focused = environment.focused(in: process), CFEqual(focused, element) else { report(.focusChanged); return .changed }
         let current = environment.text(element), selected = environment.selection(element)
-        if let capturedText, current != capturedText { return .changed }
-        if let capturedSelection, selected != capturedSelection { return .changed }
+        if let capturedText, current != capturedText { report(.textChanged); return .changed }
+        if let capturedSelection, selected != capturedSelection { report(.selectionChanged); return .changed }
         if var anchor, let current, !environment.prefersPaste(element), environment.selectedTextSettable(element),
            let replacement = anchor.replacement(text, current: current),
            let undo = VoiceUndoAnchor(original: current, replacement: replacement.text, selection: anchor.selection, cursor: replacement.cursor) {
             let source = replacement.text as NSString
             let insertedLength = source.length - (current as NSString).length + anchor.selection.length
             let insertion = source.substring(with: NSRange(location: anchor.selection.location, length: insertedLength))
+            report(.accessibilityWrite)
             let result = environment.replace(element, text: insertion)
             if result == .success {
                 _ = environment.select(element, range: NSRange(location: replacement.cursor, length: 0))
                 // A write may have succeeded even when the read-back fails.
                 // Never send a second paste in this ambiguous case.
-                guard environment.text(element) == replacement.text else { clear(); return .unavailable }
+                guard environment.text(element) == replacement.text else { report(.writeUnverified); clear(); return .unavailable }
                 receipt = UndoReceipt(element: element, process: process, anchor: undo)
                 clear()
                 return .inserted
             }
-            guard result == .attributeUnsupported || result == .notImplemented else { return .unavailable }
+            guard result == .attributeUnsupported || result == .notImplemented else { report(.writeRejected, code: Int(result.rawValue)); return .unavailable }
+            report(.unsupportedWrite, code: Int(result.rawValue))
         }
         // A native paste reaches terminal and web/Electron editors that expose
         // a focused text element but cannot implement AXSelectedText writes.
+        report(.pasteAttempt)
         guard environment.pasteable(element), !environment.secure(element), !environment.secureInput,
               environment.frontmostPID == process,
               let focused = environment.focused(in: process), CFEqual(focused, element),
               capturedText == nil || environment.text(element) == capturedText,
               capturedSelection == nil || environment.selection(element) == capturedSelection,
-              environment.paste(text: text, process: process) else { return .unavailable }
+              environment.paste(text: text, process: process) else { report(.pasteUnavailable); return .unavailable }
+        report(.pasteDispatched)
         clear()
         return .pasted // Shortcut dispatched; do not claim verified insertion/undo.
+    }
+
+    private func report(_ reason: InsertionReason, code: Int? = nil) {
+        onDiagnostic?(.init(reason: reason, axCode: code, processID: process == 0 ? nil : Int(process)))
     }
 
     func correctedInsertion() -> VoiceCorrectionSuggestion? {

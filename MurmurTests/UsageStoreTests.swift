@@ -35,4 +35,24 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertNotNil(store.storageError)
         XCTAssertEqual(try Data(contentsOf: url), original)
     }
+    func testSeparateEvaluationReceiptsMergeOnceWithoutOverwritingNormalUsage() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pending = root.appendingPathComponent("evaluations")
+        try FileManager.default.createDirectory(at: pending, withIntermediateDirectories: true)
+        let store = UsageStore(); store.open(at: root.appendingPathComponent("usage.json"))
+        store.record(.init(duration: 2, words: 4, outcome: "completed", attempts: []))
+        let receipt = VoiceUsageSession(duration: 0, words: 0, outcome: "diagnostic", attempts: [])
+        let url = pending.appendingPathComponent(receipt.id.uuidString + ".json")
+        let data = try JSONEncoder().encode(receipt)
+        try data.write(to: url)
+        store.importEvaluationReceipts(from: pending)
+        XCTAssertEqual(store.sessions.count, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        try data.write(to: url)
+        store.importEvaluationReceipts(from: pending)
+        XCTAssertEqual(store.sessions.count, 2)
+        XCTAssertEqual(store.sessions.filter { $0.outcome == "completed" }.count, 1)
+    }
+
 }

@@ -52,7 +52,7 @@ final class VoiceControllerTests: XCTestCase {
         stream.onEvent?(.interim("rename cash manager"))
         stream.onEvent?(.text("rename CacheManager"))
         stream.onEvent?(.endpoint)
-        stream.onEvent?(.turnComplete)
+        stream.onEvent?(.finalized)
         try? await Task.sleep(for: .milliseconds(180))
         XCTAssertEqual(completed, ["rename CacheManager"])
         XCTAssertEqual(usage?.words, 2)
@@ -120,7 +120,7 @@ final class VoiceControllerTests: XCTestCase {
         controller.dispose()
     }
 
-    func testOneEarlyRetryAndOneEvidenceBasedReplay() async {
+    func testOneEarlyRetryThenExplicitReplayWithoutRecordingOrInsertion() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture()
         var streams: [FakeStream] = []
@@ -135,17 +135,99 @@ final class VoiceControllerTests: XCTestCase {
         streams[1].onEvent?(.ready)
         controller.finish()
         try? await Task.sleep(for: .milliseconds(1850))
+        XCTAssertEqual(streams.count, 2, "An empty result must not silently spend another API connection")
+        XCTAssertFalse(state.isActive)
+        XCTAssertTrue(state.canRetryTranscription)
+        var deliveredAsCopyOnly = false
+        controller.onComplete = { _, copyOnly in deliveredAsCopyOnly = copyOnly }
+        controller.retryTranscription()
         XCTAssertEqual(streams.count, 3)
+        XCTAssertEqual(recorder.starts, 1)
         streams[2].onEvent?(.ready)
         XCTAssertEqual(streams[2].frames.reduce(0) { $0 + $1.count }, 3200)
         streams[2].onEvent?(.text("Recovered text"))
         streams[2].onEvent?(.endpoint)
-        streams[2].onEvent?(.turnComplete)
+        streams[2].onEvent?(.finalized)
         try? await Task.sleep(for: .milliseconds(150))
         XCTAssertEqual(state.completedText, "Recovered text")
-        XCTAssertEqual(state.currentAttemptCount, 3)
+        XCTAssertEqual(state.currentAttemptCount, 1)
+        XCTAssertTrue(deliveredAsCopyOnly)
+        XCTAssertFalse(state.canRetryTranscription)
         controller.dispose()
     }
+    func testEmptyDeadlineAllowsLateFirstTextItsFullDrainWindow() async {
+        let state = AppState(); state.voiceEnabled = true
+        let recorder = FakeCapture(); let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 6, authorize: { true })
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        recorder.onAudio?(Data(repeating: 4, count: 3200)); await settle()
+        controller.finish(); await settle()
+        try? await Task.sleep(for: .milliseconds(4700))
+        stream.onEvent?(.interim("Keep my delayed ending"))
+        try? await Task.sleep(for: .milliseconds(500))
+        XCTAssertTrue(state.isTranscribing, "The five-second empty deadline cannot cut off a newly arriving transcript")
+        stream.onEvent?(.text("Keep my delayed ending.")); stream.onEvent?(.endpoint); stream.onEvent?(.finalized)
+        XCTAssertEqual(state.completedText, "Keep my delayed ending.")
+        XCTAssertFalse(state.canRetryTranscription)
+        controller.dispose()
+    }
+
+    func testEmptyRetryExpiresAndNewCaptureClearsIt() async {
+        let state = AppState(); state.voiceEnabled = true
+        let recorder = FakeCapture()
+        var streams: [FakeStream] = []
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in
+            let stream = FakeStream(); streams.append(stream); return stream
+        }, credentialProvider: { "test" }, drainWait: 0.02, retryRetention: 0.15, authorize: { true })
+        controller.start(); await settle(); streams[0].onEvent?(.ready)
+        recorder.onAudio?(Data(repeating: 4, count: 3200)); await settle()
+        controller.finish(); await settle()
+        try? await Task.sleep(for: .milliseconds(60))
+        XCTAssertTrue(state.canRetryTranscription)
+        try? await Task.sleep(for: .milliseconds(160))
+        XCTAssertFalse(state.canRetryTranscription)
+        controller.retryTranscription()
+        XCTAssertEqual(streams.count, 1)
+        controller.start(); await settle(); streams[1].onEvent?(.ready)
+        recorder.onAudio?(Data(repeating: 4, count: 3200)); await settle()
+        controller.finish(); await settle()
+        try? await Task.sleep(for: .milliseconds(60))
+        XCTAssertTrue(state.canRetryTranscription)
+        controller.start(); await settle()
+        XCTAssertFalse(state.canRetryTranscription)
+        controller.cancel(); controller.retryTranscription()
+        XCTAssertEqual(streams.count, 3)
+        controller.dispose()
+    }
+
+    func testRetryAccountsForBothConnectionsButSpokenDurationOnlyOnce() async {
+        let state = AppState(); state.voiceEnabled = true
+        let recorder = FakeCapture()
+        var streams: [FakeStream] = []
+        var sessions: [UUID: VoiceUsageSession] = [:]
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in
+            let stream = FakeStream(); streams.append(stream); return stream
+        }, credentialProvider: { "test" }, drainWait: 0.02, authorize: { true })
+        controller.onUsageSnapshot = { sessions[$0.id] = $0 }
+        controller.start(); await settle(); streams[0].onEvent?(.ready)
+        recorder.onAudio?(Data(repeating: 4, count: 96000)); await settle()
+        streams[0].onEvent?(.usage(VoiceUsage(inputTokens: 100, outputTokens: 0)))
+        controller.finish(); await settle()
+        try? await Task.sleep(for: .milliseconds(70))
+        let obsolete = streams[0].onEvent
+        controller.retryTranscription(); streams[1].onEvent?(.ready)
+        obsolete?(.text("Stale text"))
+        XCTAssertTrue(state.interimTranscript.isEmpty)
+        streams[1].onEvent?(.usage(VoiceUsage(inputTokens: 100, outputTokens: 2)))
+        streams[1].onEvent?(.text("Actual words")); streams[1].onEvent?(.endpoint); streams[1].onEvent?(.finalized)
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(sessions.values.reduce(0) { $0 + $1.duration }, 3)
+        XCTAssertEqual(sessions.values.reduce(0) { $0 + $1.words }, 2)
+        XCTAssertEqual(sessions.values.flatMap(\.attempts).compactMap { $0.usage?.inputTokens }.reduce(0, +), 200)
+        XCTAssertEqual(state.completedText, "Actual words")
+        controller.dispose()
+    }
+
     func testSupersededErrorsCannotRestartButTextStillBelongsToRecording() async {
         let state = AppState(); state.voiceEnabled = true
         let recorder = FakeCapture()
@@ -219,7 +301,7 @@ final class VoiceControllerTests: XCTestCase {
         stream.onEvent?(.usage(VoiceUsage(inputTokens: 900, outputTokens: 900)))
         XCTAssertEqual(Set(snapshots.map(\.id)).count, 1)
         XCTAssertEqual(snapshots.filter { $0.outcome != "active" }.count, 1)
-        XCTAssertEqual(snapshots.last?.outcome, "cancelled")
+        XCTAssertEqual(snapshots.last?.outcome, "interrupted")
         XCTAssertEqual(snapshots.last?.duration, 1)
         XCTAssertEqual(snapshots.last?.words, 0)
         XCTAssertEqual(snapshots.last?.attempts.first?.usage?.inputTokens, 200)
@@ -238,7 +320,7 @@ final class VoiceControllerTests: XCTestCase {
         stream.onEvent?(.ready)
         controller.finish(); await settle()
         stream.onEvent?(.text("cash manager.")); stream.onEvent?(.endpoint)
-        stream.onEvent?(.turnComplete)
+        stream.onEvent?(.finalized)
         try? await Task.sleep(for: .milliseconds(180))
         XCTAssertEqual(state.completedText, "cash manager.")
         XCTAssertEqual(state.originalTranscript, "cash manager.")
@@ -254,7 +336,7 @@ final class VoiceControllerTests: XCTestCase {
         controller.start(); await settle(); stream.onEvent?(.ready)
         controller.finish(); await settle()
         stream.onEvent?(.text("Insert snippet review request.")); stream.onEvent?(.endpoint)
-        stream.onEvent?(.turnComplete)
+        stream.onEvent?(.finalized)
         try? await Task.sleep(for: .milliseconds(180))
         XCTAssertTrue(state.completedText.hasPrefix("Please review this change"))
         XCTAssertEqual(usage?.words, 4)
@@ -289,15 +371,15 @@ final class VoiceControllerTests: XCTestCase {
         stream.onEvent?(.interim("Keep the last four or five words"))
         try? await Task.sleep(for: .milliseconds(100))
         stream.onEvent?(.text("Keep the last four or five words.")); stream.onEvent?(.endpoint)
-        stream.onEvent?(.turnComplete)
+        stream.onEvent?(.finalized)
         XCTAssertEqual(state.completedText, "The first part. Keep the last four or five words.")
         XCTAssertFalse(state.isRecoveredText)
         controller.dispose()
     }
-    func testNewTailCancelsQuietFallbackAndTimeoutMarksRecovery() async {
+    func testSegmentsWithoutRecordingReceiptWaitAndTimeoutMarksRecovery() async {
         let state = AppState(); state.voiceEnabled = true
         let stream = FakeStream()
-        let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 0.5, quietWait: 0.05, authorize: { true })
+        let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, drainWait: 0.5, authorize: { true })
         controller.start(); await settle(); stream.onEvent?(.ready)
         controller.finish(); await settle()
         stream.onEvent?(.text("First segment")); stream.onEvent?(.endpoint)
@@ -316,12 +398,45 @@ final class VoiceControllerTests: XCTestCase {
         let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
         controller.start(); await settle(); stream.onEvent?(.ready)
         controller.finish()
-        stream.onEvent?(.text("Complete ending.")); stream.onEvent?(.endpoint); stream.onEvent?(.turnComplete)
+        stream.onEvent?(.text("Complete ending.")); stream.onEvent?(.endpoint); stream.onEvent?(.finalized)
         XCTAssertTrue(state.isTranscribing)
         await settle()
         XCTAssertTrue(stream.finished)
         XCTAssertEqual(state.completedText, "Complete ending.")
         XCTAssertFalse(state.isRecoveredText)
+        controller.dispose()
+    }
+
+    func testEscapeKeepsPartialDraftAndRejectsAllLateCallbacks() async {
+        let state = AppState(); state.voiceEnabled = true
+        let stream = FakeStream(), recorder = FakeCapture()
+        let controller = VoiceController(state: state, recorder: recorder, streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        var delivered: [(String, Bool)] = []
+        controller.onComplete = { delivered.append(($0, $1)) }
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        stream.onEvent?(.text("First paragraph.")); stream.onEvent?(.endpoint)
+        stream.onEvent?(.interim("Keep this unfinished ending"))
+        let late = stream.onEvent
+        controller.cancel()
+        XCTAssertEqual(state.completedText, "First paragraph. Keep this unfinished ending")
+        XCTAssertEqual(state.recovery.draft?.text, state.completedText)
+        XCTAssertTrue(state.recovery.draft?.interrupted == true)
+        XCTAssertEqual(delivered.count, 1); XCTAssertTrue(delivered[0].1)
+        XCTAssertTrue(stream.cancelled)
+        late?(.text("Stale network reply")); late?(.finalized)
+        XCTAssertEqual(delivered.count, 1)
+        XCTAssertEqual(state.completedText, "First paragraph. Keep this unfinished ending")
+    }
+    func testAuthoritativeReceiptCompletesWithoutFixedTwoSecondWait() async {
+        let state = AppState(); state.voiceEnabled = true
+        let stream = FakeStream()
+        let controller = VoiceController(state: state, recorder: FakeCapture(), streamFactory: { _, _, _ in stream }, credentialProvider: { "test" }, authorize: { true })
+        controller.start(); await settle(); stream.onEvent?(.ready)
+        controller.finish(); await settle()
+        stream.onEvent?(.text("All words received.")); stream.onEvent?(.endpoint); stream.onEvent?(.finalized)
+        await settle()
+        XCTAssertEqual(state.completedText, "All words received.")
+        XCTAssertLessThan(state.lastFinalizationLatency ?? 999, 0.25)
         controller.dispose()
     }
 

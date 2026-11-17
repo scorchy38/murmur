@@ -58,6 +58,9 @@ struct RecordingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { editedText = appState.completedText; learningBaseline = appState.completedText }
+        .onChange(of: appState.interimTranscript) { _, text in
+            if let id = appState.diagnosticRecordingID { appState.diagnostics.record(.previewPresented, id: id, values: .init(textCharacters: text.count), coalesce: 1) }
+        }
         .onChange(of: appState.completedText) { _, text in editedText = text; learningBaseline = text; copied = false }
         .task(id: editedText) {
             let draft = editedText
@@ -87,8 +90,8 @@ struct RecordingView: View {
                 appState.learnReviewedSpellings(original: learningBaseline, edited: editedText)
             } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
             .buttonStyle(.plain).foregroundStyle(.secondary)
-            .help(appState.isActive ? "Cancel (Escape)" : "Dismiss")
-            .accessibilityLabel(appState.isActive ? "Cancel recording" : "Dismiss result")
+            .help(appState.isActive ? "Stop and keep draft (Escape)" : "Dismiss")
+            .accessibilityLabel(appState.isActive ? "Stop and keep draft" : "Dismiss result")
         }
     }
 
@@ -149,12 +152,16 @@ struct RecordingView: View {
                 Text("Final corrections arrive here.")
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
-                Text("esc to cancel").font(.caption).foregroundStyle(.tertiary)
+                Text("esc to keep draft").font(.caption).foregroundStyle(.tertiary)
             } else {
-                Text(editedText.isEmpty ? "Check your connection in Settings." : "Editable. Yours to use.")
+                Text(editedText.isEmpty ? (appState.canRetryTranscription ? "Retry without speaking again. Kept in memory for up to 5 minutes." : "Check your connection in Settings.") : "Editable. Yours to use.")
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 if editedText.isEmpty {
+                    if appState.canRetryTranscription {
+                        Button("Retry transcription") { NotificationCenter.default.post(name: .retryTranscription, object: nil) }
+                            .buttonStyle(.borderedProminent)
+                    }
                     Button("Settings") { NotificationCenter.default.post(name: .openSettings, object: nil) }
                         .buttonStyle(.borderedProminent)
                 } else {

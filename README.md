@@ -5,6 +5,8 @@ Native dictation for Mac: hold Shift, speak, and watch your words take shape in 
 ## Features
 
 - **macOS**: Guarded hold-Shift or tap-Shift dictation, live Smart transcription, native Liquid Glass on macOS 26, editable result review, searchable history, Keychain credentials, safe text insertion, cancellation and streaming recovery.
+- **Long recordings and draft safety**: One continuous recognition turn runs until shortcut release, with an eight-minute recording cap. Final results do not wait for a fixed quiet delay. Extra keys leave an admitted recording active; Escape stops and preserves the recognized draft for review/copy. With history enabled, a local recovery checkpoint survives restart.
+- **Local diagnostics**: Persistent event timelines correlate capture, network progress, preview changes and insertion outcomes. Logs rotate after seven days, 50 sessions or 20 MB. Export includes recent connection measurements and timelines, with no audio, prompt text, credentials, clipboard contents or field contents.
 - **Setup and recovery**: Guided practice, alternate shortcuts, optional compact Shadow Mode feedback, guarded insertion/clipboard undo, and redacted diagnostics export. See [the reliability release and validation checklist](docs/reliability-release.md).
 - **Personal vocabulary**: Saved names and technical spellings guide Gemini’s recognition using the audio and context. Murmur does not replace homophones after recognition. Stable name corrections in Murmur’s own editors can become vocabulary hints; this can be disabled in Personalize. Edits elsewhere are not automatically learned.
 - **Editor compatibility**: Native Accessibility insertion where supported, with a guarded paste path for web and terminal editors. The original app and field must remain focused; text is also kept on the clipboard.
@@ -14,7 +16,7 @@ Native dictation for Mac: hold Shift, speak, and watch your words take shape in 
 
 ## How It Works
 
-On Mac, microphone audio streams as mono 16 kHz PCM to the native speech adapter using Gemini Smart transcription and manual utterance boundaries. Interim text is replaced in place; late final corrections arrive before commitment. Audio remains in memory and is cleared by the recording lifecycle. Completed text can be saved locally and optionally synced over a trusted local network. Dictation never automatically submits a message.
+On Mac, microphone audio streams as mono 16 kHz PCM to the native speech adapter using Gemini Smart transcription and manual utterance boundaries. Interim text is replaced in place; late final corrections arrive before commitment. Audio remains in memory. An empty result offers an explicit retry for up to five minutes, without another microphone recording. Starting a new recording, successful completion, cancellation or quitting clears the retained audio. Empty results no longer trigger a second API connection automatically. Completed text can be saved locally and optionally synced over a trusted local network. Dictation never automatically submits a message.
 
 The existing mobile clients retain the legacy Groq upload path. See [native architecture, specification mapping, and validation](docs/voice-implementation.md) and [the supplied specification](docs/voice-spec.md).
 

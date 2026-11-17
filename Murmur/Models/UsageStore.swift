@@ -34,6 +34,9 @@ final class UsageStore: ObservableObject {
                 }
             }
             save()
+            if overrideURL == nil {
+                importEvaluationReceipts(from: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Murmur/Evaluations"))
+            }
         } catch {
             writable = false
             storageError = "Usage history could not be opened. Existing data has been preserved."
@@ -43,6 +46,21 @@ final class UsageStore: ObservableObject {
         if let index = sessions.firstIndex(where: { $0.id == session.id }) { sessions[index] = session }
         else { sessions.append(session) }
         save()
+    }
+    /// Live probes write separate receipts so they cannot race the running
+    /// app's ledger. Import once on the next normal launch, without duplication.
+    func importEvaluationReceipts(from directory: URL) {
+        guard fileURL != nil, writable else { return }
+        for file in ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []).prefix(50) {
+            guard file.pathExtension == "json", let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent),
+                  ((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 1_000_001) <= 1_000_000,
+                  let data = try? Data(contentsOf: file), let receipt = try? JSONDecoder().decode(VoiceUsageSession.self, from: data),
+                  receipt.id == id, receipt.outcome == "diagnostic", receipt.words == 0, receipt.duration == 0 else { continue }
+            if !sessions.contains(where: { $0.id == id }) { sessions.append(receipt) }
+            sessions.sort { $0.startedAt < $1.startedAt }
+            save()
+            if storageError == nil { try? FileManager.default.removeItem(at: file) }
+        }
     }
     private func save() {
         guard let fileURL, writable else { return }

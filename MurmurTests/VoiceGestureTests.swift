@@ -123,7 +123,7 @@ final class VoiceGestureTests: XCTestCase {
         XCTAssertEqual(starts, 1); XCTAssertEqual(finishes, 1)
         manager.reset()
     }
-    func testAlternateShortcutRespectsGateAndOtherKeysCancel() {
+    func testAlternateShortcutRespectsGateAndOtherKeysPreserveRecording() {
         let manager = HotkeyManager(); manager.shortcut = { .controlOption }
         var starts = 0; var cancels = 0
         manager.onStart = { starts += 1 }; manager.onCancel = { cancels += 1 }
@@ -132,11 +132,11 @@ final class VoiceGestureTests: XCTestCase {
         manager.enabled = { true }
         _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
         _ = manager.handle(.keyDown, event: event(.keyDown, key: 0, flags: [.maskControl, .maskAlternate]))
-        XCTAssertEqual(starts, 1); XCTAssertEqual(cancels, 1)
+        XCTAssertEqual(starts, 1); XCTAssertEqual(cancels, 0)
         manager.reset()
     }
 
-    func testExtraModifierCancelsAlternateHoldWithoutRestartingOrCommitting() {
+    func testExtraModifierKeepsAlternateHoldUntilRequiredModifiersRelease() {
         let manager = HotkeyManager(); manager.enabled = { true }; manager.shortcut = { .controlOption }
         var starts = 0; var finishes = 0; var cancels = 0
         manager.onStart = { starts += 1 }; manager.onFinish = { finishes += 1 }; manager.onCancel = { cancels += 1 }
@@ -144,7 +144,23 @@ final class VoiceGestureTests: XCTestCase {
         _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate, .maskCommand]))
         _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: [.maskControl, .maskAlternate]))
         _ = manager.handle(.flagsChanged, event: event(.flagsChanged))
-        XCTAssertEqual(starts, 1); XCTAssertEqual(cancels, 1); XCTAssertEqual(finishes, 0)
+        XCTAssertEqual(starts, 1); XCTAssertEqual(cancels, 0); XCTAssertEqual(finishes, 1)
+        manager.reset()
+    }
+
+    func testTypingAndExtraModifiersDuringAdmittedShiftDoNotCancelOrFinish() async {
+        let manager = HotkeyManager(); manager.enabled = { true }; manager.activationDelay = { 1 }
+        var starts = 0, finishes = 0, cancels = 0
+        manager.onStart = { starts += 1 }; manager.onFinish = { finishes += 1 }; manager.onCancel = { cancels += 1 }
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: .maskShift))
+        try? await Task.sleep(for: .milliseconds(1100))
+        XCTAssertEqual(starts, 1)
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, key: 58, flags: [.maskShift, .maskAlternate]))
+        _ = manager.handle(.keyDown, event: event(.keyDown, key: 0, flags: [.maskShift, .maskAlternate]))
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged, flags: .maskShift))
+        XCTAssertEqual(cancels, 0); XCTAssertEqual(finishes, 0)
+        _ = manager.handle(.flagsChanged, event: event(.flagsChanged))
+        XCTAssertEqual(finishes, 1)
         manager.reset()
     }
 

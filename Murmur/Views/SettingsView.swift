@@ -85,7 +85,7 @@ struct SettingsView: View {
                 Toggle("Shadow Mode", isOn: $appState.shadowMode)
                     .disabled(appState.isActive)
                     .onChange(of: appState.shadowMode) { _, _ in changed() }
-                Text("Dictate without the center-screen overlay. Completed text is copied to your clipboard, ready to paste. The menu bar icon still shows recording and processing; Escape cancels.")
+                Text("Dictate without the center-screen overlay. Completed text is copied to your clipboard, ready to paste. The menu bar icon still shows recording and processing; Escape stops and keeps your draft.")
                     .font(.caption).foregroundStyle(.secondary)
                 if appState.shadowMode {
                     Toggle("Show a small status indicator", isOn: $appState.shadowIndicatorEnabled)
@@ -224,7 +224,8 @@ struct SettingsView: View {
         Group {
             Section("You choose what stays") {
                 Toggle("Save transcription history on this Mac", isOn: $appState.saveHistory)
-                Text("Up to 50 completed transcriptions are saved. Turning this off stops future saves; existing history remains until you delete it from the Library.")
+                    .onChange(of: appState.saveHistory) { _, enabled in if !enabled { appState.recovery.clear() } }
+                Text("Up to 50 prompts are saved, along with one recovery draft while recording. Escape keeps your draft. Turning this off removes the disk recovery draft and stops future saves; existing Library history remains until you delete it. Audio is never stored.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Sync completed text on the local network", isOn: $appState.syncEnabled)
                     .onChange(of: appState.syncEnabled) { _, _ in changed() }
@@ -239,8 +240,8 @@ struct SettingsView: View {
             }
             Section("While you dictate") {
                 Label("Audio streams only during an intentional recording.", systemImage: "mic")
-                Label("Recording audio stays in memory and is cleared after completion or cancellation.", systemImage: "memorychip")
-                Label("Escape cancels. Recognized words never send a message or run an action.", systemImage: "escape")
+                Label("Audio stays in memory. Empty results can be retried for up to five minutes; starting a new recording, successful completion, or quitting clears it.", systemImage: "memorychip")
+                Label("Escape stops and keeps your draft. Recognized words never send a message or run an action.", systemImage: "escape")
                 Text("Audio and vocabulary are sent directly to your speech service for recognition. Processing and retention at the service follow your speech account’s terms.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -251,9 +252,12 @@ struct SettingsView: View {
                 if let value = appState.lastConnectionLatency { LabeledContent("Connection ready", value: String(format: "%.2f seconds", value)) }
                 if let value = appState.lastFirstTextLatency { LabeledContent("First text", value: String(format: "%.2f seconds", value)) }
                 if let value = appState.lastFinalizationLatency { LabeledContent("Finishing", value: String(format: "%.2f seconds", value)) }
-                Button("Export diagnostics…") { exportDiagnostics() }
+                HStack {
+                    Button("Export diagnostics…") { exportDiagnostics() }
+                    Button("Clear diagnostic logs") { appState.diagnostics.clear(); diagnosticsStatus = "Local diagnostic logs cleared." }.disabled(appState.isActive)
+                }
                 if let diagnosticsStatus { Text(diagnosticsStatus).font(.caption).foregroundStyle(.secondary) }
-                Text("The export contains counts, timings, permission states and bounded outcomes. No audio, prompt text, API key, vocabulary or field contents.")
+                Text("Local diagnostics keep event timelines for up to 7 days and 50 recent sessions, capped at 20 MB. Exports include timings, connection counters, permission states and target app identifiers. Audio, prompt text, API keys, vocabulary, clipboard contents and field contents are excluded. Logs are never uploaded automatically.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let tokens = appState.lastUsageTokens { LabeledContent("Reported usage", value: "\(tokens) tokens") }
                 Text("Each connection or recovery attempt may incur usage, even if you cancel or no text is inserted. Operational logs contain counts and outcomes, not recorded speech.")
@@ -270,7 +274,7 @@ struct SettingsView: View {
         do {
             try VoiceDiagnostics(state: appState).data().write(to: url, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-            diagnosticsStatus = "Diagnostics saved. You choose whether to share the file."
+            diagnosticsStatus = appState.diagnostics.storageIssue == nil ? "Diagnostics saved. You choose whether to share the file." : "Diagnostics saved, including available in-memory events. Some diagnostic logs could not be stored on disk."
         } catch { diagnosticsStatus = "Diagnostics could not be saved. Choose another location and try again." }
     }
     private func permissionRow(_ name: String, granted: Bool, path: String) -> some View {

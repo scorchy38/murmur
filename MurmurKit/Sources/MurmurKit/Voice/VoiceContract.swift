@@ -17,13 +17,19 @@ public struct VoiceAttemptSummary: Codable, Equatable, Sendable, Identifiable {
     public var reportedTokens: Int?
     public var usage: VoiceUsage?
     public var estimatedOutputTokens: Int?
+    public var transportFailure: VoiceTransportFailure?
+    public var streamProgress: VoiceStreamProgress?
+    public var transcriptEvents: Int?
+    public var finalizedSegments: Int?
+    public var lastTextAudioSeconds: Double?
+    public var finalizationSeconds: Double?
     public var outcome = "active"
     public init() {}
 }
 
 public enum VoiceMode: String, CaseIterable, Sendable { case hold, tap }
 
-public enum VoiceFailure: String, Error, LocalizedError, Sendable {
+public enum VoiceFailure: String, Error, LocalizedError, Codable, Sendable {
     case credentials, keychain, permission, device, connection, quota, limit, noSignal, noSpeech, paused, setup, unsupported
 
     public var errorDescription: String? {
@@ -36,7 +42,7 @@ public enum VoiceFailure: String, Error, LocalizedError, Sendable {
         case .quota: "Speech is temporarily unavailable because the account’s quota was reached. Check your speech account and try again."
         case .limit: "This recording reached a resource limit. Your available text has been preserved."
         case .noSignal: "No microphone signal detected. Check your input device and microphone level."
-        case .noSpeech: "No speech was recognized. Try speaking a little closer to your microphone."
+        case .noSpeech: "No text was returned. If you spoke, retry the recording or check your connection."
         case .paused: "Recording is paused after repeated startup failures. Wait a moment, then try again."
         case .setup: "The speech service could not start a session. Check your credential and service access in Settings."
         case .unsupported: "This audio format is not supported. Choose a different microphone."
@@ -46,14 +52,73 @@ public enum VoiceFailure: String, Error, LocalizedError, Sendable {
     public var isFatal: Bool { [.credentials, .keychain, .permission, .quota, .limit, .unsupported, .setup].contains(self) }
 }
 
+/// Transport counts and timings only: no audio, recognized text or credentials.
+public struct VoiceStreamProgress: Codable, Equatable, Sendable {
+    public init() {}
+    public var sentAudioBytes = 0
+    public var queuedAudioBytes = 0
+    public var receivedMessages = 0
+    public var interimMessages = 0
+    public var finalMessages = 0
+    public var activityStarts: Int?
+    public var activityEnds: Int?
+    public var earlyFinals: Int?
+    public var turnCompleteMessages = 0
+    public var lastMessageSeconds: Double?
+    public var lastTranscriptSeconds: Double?
+    public var largestInterimCharacters = 0
+    public var lastTranscriptChangeSeconds: Double?
+    public var malformedMessages: Int?
+    public var largestMessageGapSeconds: Double?
+    public var largestTranscriptChangeGapSeconds: Double?
+    public var unchangedInterimMessages: Int?
+    public var lastAudioSendSeconds: Double?
+    public var largestAudioSendGapSeconds: Double?
+}
+
+public struct VoiceTransportFailure: Codable, Equatable, Sendable {
+    public enum Phase: String, Codable, Sendable { case setup, send, receive, ping, finalizationTimeout }
+    public enum Domain: String, Codable, Sendable { case url, posix, other }
+    public var phase: Phase
+    public var httpStatus: Int?
+    public var webSocketCode: Int?
+    public var errorCode: Int?
+    public var providerErrorCode: Int?
+    public var domain: Domain?
+}
+
+/// Bounded server control fields. Text, words and raw server messages are excluded.
+public struct VoiceProviderBoundary: Codable, Equatable, Sendable {
+    public enum Origin: String, Codable, Sendable { case server, clientActivityStart, clientActivityEnd }
+    public var origin: Origin?
+    public var elapsedSeconds: Double
+    public var sentAudioBytes: Int
+    public var queuedAudioBytes: Int
+    public var clientFinishRequested: Bool
+    public var clientInputEnded: Bool
+    public var transcriptionPresent: Bool
+    public var transcriptionFinished: Bool?
+    public var startOffsetSeconds: Double?
+    public var endOffsetSeconds: Double?
+    public var generationComplete: Bool?
+    public var turnComplete: Bool?
+    public var waitingForInput: Bool?
+    public var textCharacters: Int?
+}
+
 /// Product events. Provider field names and credentials stay in the adapter.
 public enum VoiceEvent: Equatable, Sendable {
     case ready
     case inputClosed
+    /// All admitted audio has received an authoritative final transcription.
+    case finalized
     case interim(String)
     case text(String)
     case endpoint
     case turnComplete
+    case providerBoundary(VoiceProviderBoundary)
+    case transportFailure(VoiceTransportFailure)
+    case progress(VoiceStreamProgress)
     case usage(VoiceUsage)
     case failure(VoiceFailure)
     case closed

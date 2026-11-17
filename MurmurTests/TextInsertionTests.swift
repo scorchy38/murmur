@@ -126,4 +126,22 @@ final class TextInsertionTests: XCTestCase {
         XCTAssertEqual(inserter.insert("another"), .unavailable)
         XCTAssertEqual(platform.pastes, ["prompt"])
     }
+    func testDiagnosticsIdentifyFocusAndWriteFailuresWithoutReadingOrLoggingText() {
+        let platform = InsertionPlatform()
+        let target = TextInserter(environment: platform)
+        var events: [DiagnosticValues] = []
+        target.onDiagnostic = { events.append($0) }
+        target.capture()
+        platform.focusChanged = true
+        XCTAssertEqual(target.insert("private content"), .changed)
+        XCTAssertEqual(events.map(\.reason), [.targetReady, .focusChanged])
+        platform.focusChanged = false; platform.settable = true; platform.result = .cannotComplete
+        target.capture()
+        XCTAssertEqual(target.insert("private content"), .unavailable)
+        XCTAssertEqual(events.last?.reason, .writeRejected)
+        XCTAssertEqual(events.last?.axCode, Int(AXError.cannotComplete.rawValue))
+        let text = String(decoding: try! JSONEncoder().encode(events), as: UTF8.self)
+        XCTAssertFalse(text.contains("private content"))
+    }
+
 }

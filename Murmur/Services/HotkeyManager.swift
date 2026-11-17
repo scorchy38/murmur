@@ -15,6 +15,7 @@ final class HotkeyManager {
     var onStart: () -> Void = {}
     var onFinish: () -> Void = {}
     var onCancel: () -> Void = {}
+    var onInterruptionReason: ((DiagnosticTrigger) -> Void)?
     private var alternateDown = false
     private var alternateConsumed = false
     private var tap: CFMachPort?
@@ -53,23 +54,22 @@ final class HotkeyManager {
     func handle(_ type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             reset()
-            if isActive() { onCancel() }
+            if isActive() { interrupt(.eventTapLost) }
             return false
         }
         if type == .keyDown {
             let key = event.getIntegerValueField(.keyboardEventKeycode)
             if canCancel(), key == 53 || (key == 8 && event.flags.contains(.maskControl)) {
-                reset(); onCancel(); return true
+                reset(); interrupt(key == 53 ? .escape : .controlC); return true
             }
         }
         if shortcut() != .shift { return handleAlternate(type, event: event) }
         if type == .keyDown {
-            if shiftDown {
+            if shiftDown && !admitted {
                 blocked = true
                 warmup?.cancel(); onWarmup(false)
-                // A Shift shortcut or text entry takes ownership, even after warmup.
-                if admitted && mode() == .hold { onCancel() }
-                admitted = false
+                // Before admission, ordinary typing owns Shift. Once listening,
+                // other keys never destroy the current recording.
             }
             return false
         }
@@ -81,9 +81,8 @@ final class HotkeyManager {
         let flags = event.flags
         let down = flags.contains(.maskShift)
         let otherModifier = !flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskSecondaryFn]).isEmpty
-        if otherModifier {
+        if otherModifier && !admitted {
             blocked = true; warmup?.cancel(); onWarmup(false)
-            if admitted && mode() == .hold { onCancel(); admitted = false }
         }
         guard down != shiftDown else { return false }
         shiftDown = down
@@ -133,15 +132,13 @@ final class HotkeyManager {
         }
         if type == .flagsChanged {
             if shortcut() == .controlOption {
-                let down = modifiers == [.maskControl, .maskAlternate]
+                let down = modifiers.contains([.maskControl, .maskAlternate])
                 if down && !alternateDown { pressAlternate() }
                 else if !down && alternateDown {
-                    if !modifiers.intersection([.maskCommand, .maskShift, .maskSecondaryFn]).isEmpty { cancelAlternateAdmission() }
-                    else { releaseAlternate() }
+                    releaseAlternate()
                 }
-            } else if alternateDown && modifiers != .maskControl {
-                if !modifiers.intersection([.maskCommand, .maskShift, .maskAlternate, .maskSecondaryFn]).isEmpty { cancelAlternateAdmission() }
-                else { releaseAlternate() }
+            } else if alternateDown && !modifiers.contains(.maskControl) {
+                releaseAlternate()
             }
             return false
         }
@@ -151,20 +148,9 @@ final class HotkeyManager {
                 alternateConsumed = pressAlternate()
                 return alternateConsumed
             }
-            if alternateDown {
-                blocked = true
-                if admitted && mode() == .hold { onCancel() }
-                admitted = false
-            }
+            if alternateDown && !admitted { blocked = true }
         }
         return false
-    }
-    private func cancelAlternateAdmission() {
-        blocked = true
-        if admitted && mode() == .hold { onCancel() }
-        admitted = false
-        // Keep ownership of this press until release, so dropping the extra
-        // modifier cannot unexpectedly start a second recording.
     }
     @discardableResult private func pressAlternate() -> Bool {
         guard enabled() else { return false }
@@ -186,6 +172,10 @@ final class HotkeyManager {
         }
         blocked = false
     }
+    private func interrupt(_ reason: DiagnosticTrigger) {
+        onInterruptionReason?(reason)
+        onCancel()
+    }
     func reset() {
         warmup?.cancel(); warmup = nil
         alternateDown = false; alternateConsumed = false
@@ -198,6 +188,6 @@ final class HotkeyManager {
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         tap = nil; source = nil
-        if interrupted { onCancel() }
+        if interrupted { interrupt(.shortcutUnavailable) }
     }
 }
